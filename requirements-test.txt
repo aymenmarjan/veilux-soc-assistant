@@ -1,4 +1,4 @@
 -r requirements.txt
-pytest>=8,<10
+pytest>=9.2.0,<10
 playwright>=1.50,<2
 cryptography>=43
