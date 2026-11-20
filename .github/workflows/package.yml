@@ -36,7 +36,7 @@ jobs:
     name: Browser extensions (Chromium ZIP, Firefox XPI)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -73,7 +73,7 @@ jobs:
           - { os: macos-15-intel, tag: macos-x64 }
           - { os: macos-15, tag: macos-arm64 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-python@v5
@@ -109,7 +109,7 @@ jobs:
     needs: [extensions, backend]
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-python@v5
@@ -159,7 +159,7 @@ jobs:
     runs-on: macos-15
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Convert with safari-web-extension-converter
