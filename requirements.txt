@@ -1,6 +1,6 @@
 # Backend. Lower bounds are the versions VEILUX is tested with; upper bounds
 # stop a future major release from changing behaviour without review.
-fastapi>=0.128.0,<1
+fastapi>=0.163.1,<1
 uvicorn>=0.40.0,<1
 httpx>=0.28.1,<1
 certifi>=2024.8.30
