@@ -51,7 +51,7 @@ jobs:
           mkdir -p build/xpi && unzip -q dist/veilux-*-firefox.xpi -d build/xpi
           cd tools/browser-check && npm ci --no-audit --no-fund
           VEILUX_EXTENSION_DIR="$GITHUB_WORKSPACE/build/xpi" npm run check
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: extensions
           path: |
@@ -95,7 +95,7 @@ jobs:
           python -c "import glob, shutil, sys; shutil.unpack_archive(glob.glob('dist/veilux-backend-*-${{ matrix.tag }}.*')[0], sys.argv[1])" "$RUNNER_TEMP/extracted"
           program=$(ls -d "$RUNNER_TEMP"/extracted/veilux-backend-*/veilux-backend*  | grep -v '\.txt$' | head -1)
           cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/packaging/smoke_test.py" "$program"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: backend-${{ matrix.tag }}
           path: |
@@ -144,7 +144,7 @@ jobs:
           cd release
           sha256sum -- * | tee SHA256SUMS.txt
           test "$(wc -l < SHA256SUMS.txt)" -eq 6
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: veilux-release-packages
           path: release/
@@ -175,7 +175,7 @@ jobs:
           xcodebuild -project "$project" -scheme VEILUX -configuration Release -destination 'generic/platform=macOS' \
             CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -25
           (cd build/safari && zip -qr ../../dist/veilux-safari-xcode-project-unsigned.zip .)
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: safari-experimental
           path: dist/
