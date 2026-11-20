@@ -1,0 +1,17 @@
+name: Feature request
+description: An idea that would make VEILUX more useful.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: "**No real logs, addresses, names or keys, please.** Synthetic examples are perfect."
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?

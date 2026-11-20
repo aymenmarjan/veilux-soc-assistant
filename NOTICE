@@ -1,0 +1,12 @@
+VEILUX - Secure AI SOC Assistant
+Copyright © 2026 Aymen Marjan and contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The credential detection rules in secret_detection.py are adapted from rule
+definitions of the following projects, both licensed under the MIT License:
+
+  Gitleaks    Copyright (c) 2019 Zachary Rice    https://github.com/gitleaks/gitleaks
+  Secretlint  Copyright (c) 2020 azu             https://github.com/secretlint/secretlint
+
+Their full licence texts are in THIRD_PARTY_NOTICES.md.

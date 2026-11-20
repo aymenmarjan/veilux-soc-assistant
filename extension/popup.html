@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VEILUX: Secure AI SOC Assistant</title>
+<script src="theme.js"></script>
+<link href="styles.css" rel="stylesheet"/>
+<link href="ui.css" rel="stylesheet"/></head>
+<body class="popup-page">
+<div class="container"><div class="header brand-bar">
+<img alt="VEILUX logo" class="logo brand-logo" height="56" src="icons/logo-portrait.png" width="56"/>
+<div class="header-content">
+<div class="brand-text"><h1 class="brand-name">VEILUX</h1><p class="brand-tagline">Secure AI SOC Assistant</p></div>
+<nav aria-label="Cases" class="case-switcher" id="case-switcher">
+<button aria-label="Previous case" class="case-step" id="case-prev" title="Previous case" type="button">‹</button>
+<div class="case-current"><span aria-live="polite" class="case-label" id="case-label">Case 1</span><span class="case-dots" id="case-dots"></span></div>
+<button aria-label="Next case" class="case-step" id="case-next" title="Next case" type="button">›</button>
+<details class="case-menu" id="case-menu"><summary aria-label="Case actions and archive" title="Case actions and archive">⋯</summary><div class="case-menu-panel" id="case-menu-panel"></div></details>
+</nav>
+<button aria-label="Open settings" class="icon-btn" id="settings-btn" title="Settings">Settings</button>
+</div>
+</div>
+<div class="archived-banner" hidden="" id="archived-banner" role="region" aria-label="Archived case"><p id="archived-banner-text">Archived case</p><div class="archived-actions"><button class="btn btn-secondary btn-small" id="archived-back" type="button">Back to cases</button><button class="btn btn-primary btn-small" id="archived-restore" type="button">Restore to an empty slot</button><button class="btn btn-danger btn-small" id="archived-delete" type="button">Delete</button></div></div><nav aria-label="Workspace" class="stage-rail" id="stage-rail" role="tablist">
+<button aria-controls="stage-review" class="stage-tab stage-tab-review" data-stage="review" hidden="" id="stage-tab-review" role="tab" type="button"><span class="stage-step">!</span><span class="stage-text"><span class="stage-name">Review</span><span class="stage-sum" id="stage-sum-review"></span></span></button>
+<button aria-controls="stage-case" class="stage-tab" data-stage="case" id="stage-tab-case" role="tab" type="button"><span class="stage-step">1</span><span class="stage-text"><span class="stage-name">Case</span><span class="stage-sum" id="stage-sum-case"></span></span></button>
+<button aria-controls="stage-options" class="stage-tab" data-stage="options" id="stage-tab-options" role="tab" type="button"><span class="stage-step">2</span><span class="stage-text"><span class="stage-name">Options</span><span class="stage-sum" id="stage-sum-options"></span></span></button>
+<button aria-controls="stage-results" class="stage-tab" data-stage="results" id="stage-tab-results" role="tab" type="button"><span class="stage-step">3</span><span class="stage-text"><span class="stage-name">Results</span><span class="stage-sum" id="stage-sum-results"></span></span></button>
+<button aria-controls="stage-tools" class="stage-tab stage-tab-tools" data-stage="tools" id="stage-tab-tools" role="tab" type="button"><span class="stage-text"><span class="stage-name">Tools</span><span class="stage-sum" id="stage-sum-tools">Indicators</span></span></button>
+</nav><div class="site-access-banner" data-site-access="" hidden="" id="site-access" role="alert"></div><div class="interrupted-banner" hidden="" id="review-interrupted" role="status"><span id="review-interrupted-text"></span><span class="interrupted-actions"><button class="btn btn-primary btn-small" id="review-interrupted-resume" type="button">Continue review</button><button class="btn btn-secondary btn-small" id="review-interrupted-drop" type="button">Drop it</button></span></div><main id="main-workflow"><section aria-labelledby="stage-tab-review" class="stage" data-stage="review" id="stage-review" role="tabpanel" hidden=""><div class="secret-review review-panel" id="secret-review" style="display:none;"><p class="review-lead">These values <strong>might</strong> be credentials. Checked values are kept and sent; uncheck one to hide it. Nothing is sent until you continue.</p>
+
+
+
+<label class="secret-review-filter">Filter values <input id="secret-review-filter" placeholder="Find a value or reason…" type="search"/></label>
+<div class="secret-review-toolbar"><span id="secret-review-count"></span><button class="btn btn-secondary btn-small" id="secret-review-refresh" type="button">Refresh page highlights</button></div>
+<p aria-live="polite" id="secret-review-page-status" role="status"></p>
+<div id="secret-review-list"></div>
+<p class="decision-summary" id="secret-review-decisions" role="status"></p></div></section><section aria-labelledby="stage-tab-case" class="stage" data-stage="case" id="stage-case" role="tabpanel"><div class="case-toolbar"><button class="btn btn-primary btn-extract-smart" id="extract-btn">Extract logs</button><button class="btn btn-primary" id="extract-stats-btn">Extract statistics</button><button class="btn btn-secondary" id="clear-btn" title="Clears captured logs, extracted statistics, case notes and results. Saved settings are kept.">Clear all inputs &amp; results</button></div><div aria-live="polite" class="source-summary" id="source-summary">Paste logs or extract from a source page.</div><div aria-label="Case inputs" class="subtabs" id="case-tabs" role="tablist"><button aria-controls="logs-preview" aria-expanded="true" class="subtab" id="logs-toggle" role="tab" type="button"><span>Logs</span><span class="subtab-count" id="case-count-logs"></span></button><button aria-controls="statistics-preview" aria-expanded="true" class="subtab" id="statistics-toggle" role="tab" type="button"><span>Statistics</span><span class="subtab-count" id="case-count-statistics"></span></button><button aria-controls="analyst-data-preview" aria-expanded="false" class="subtab" id="analyst-data-toggle" role="tab" type="button"><span id="case-notes-title">Case notes · optional</span></button></div><div class="section sub-panel" id="case-panel-logs"><div class="logs-preview" id="logs-preview">
+<textarea aria-label="Captured logs" id="logs-textarea" placeholder="No logs captured yet."></textarea>
+<button class="btn-copy" id="copy-logs-btn">Copy original logs</button>
+</div></div><div class="sub-panel" hidden="" id="case-panel-statistics"><div class="sample-size-row"><label for="statistics-sample-size">Statistics sample</label><input aria-describedby="statistics-sample-help" id="statistics-sample-size" max="100000" min="1" step="500" type="number" value="5000"/><span id="statistics-sample-help">records (1 to 100,000)</span><label for="statistics-top-values">Top values</label><input aria-describedby="statistics-top-help" id="statistics-top-values" max="10" min="1" step="1" type="number" value="5"/><span id="statistics-top-help">per field (1 to 10)</span></div><p class="empty-state" id="statistics-empty">No statistics yet. Open a search in your SIEM and choose <strong>Extract statistics</strong> to summarize its fields.</p><div class="section" id="statistics-section" style="display:none;">
+
+<div class="logs-preview" id="statistics-preview">
+<div id="statistics-list"></div>
+<div class="statistics-actions">
+<button class="btn btn-secondary btn-small" hidden="" id="statistics-toggle-all" type="button">Collapse all</button>
+<button class="btn btn-secondary btn-small" id="copy-statistics-btn">📋 Copy all</button>
+<button class="btn btn-danger btn-small" id="clear-statistics-btn">🗑️ Clear all statistics</button>
+</div>
+</div>
+</div></div><div class="section sub-panel" hidden="" id="case-panel-notes"><div class="logs-preview" id="analyst-data-preview">
+<p class="field-hint">What you know about this case. Sent with every analysis, question and report. Answers you keep from Ask are listed below.</p>
+<textarea aria-label="Case notes" id="analyst-data-textarea" placeholder="Add business context, intelligence, prior similar cases, validation notes, or your perspective here."></textarea>
+<button class="btn-copy" id="copy-analyst-data-btn">Copy notes</button>
+<div aria-label="Notes kept from Ask" class="case-notes-list" id="case-notes-list"></div>
+</div></div></section><section aria-labelledby="stage-tab-options" class="stage" data-stage="options" id="stage-options" role="tabpanel" hidden=""><section class="section setup-section" id="analysis-setup">
+<div class="workflow-heading"><h2>What to run</h2></div>
+<fieldset class="mode-choice"><legend class="sr-only">Analysis mode</legend>
+<label><input checked="" name="workflow-mode" type="radio" value="ai"/> Analyze with AI</label>
+<label><input name="workflow-mode" type="radio" value="sanitize_only"/> Sanitize locally</label>
+</fieldset>
+<p class="field-hint" hidden="" id="local-mode-help">Sanitize inputs locally without AI analysis or threat intelligence lookups.</p>
+<div id="provider-controls"><div class="provider-row"><label for="ai-provider">AI provider</label><button class="text-button" id="provider-settings" type="button">Configure providers</button></div>
+<select id="ai-provider"><option value="groq">Groq</option><option value="deepseek">DeepSeek</option><option value="together">Together AI</option><option value="openrouter">OpenRouter</option><option value="gemini">Gemini</option><option value="claude">Claude</option></select>
+<p class="field-hint" id="provider-status"></p>
+<details class="or-popup" hidden="" id="openrouter-model-panel"><summary>OpenRouter model: <span id="openrouter-model-name">not chosen</span></summary>
+<div class="or-picker" id="popup-openrouter-picker"></div></details></div>
+<div id="prompt-selector-section">
+<label class="prompt-selector-label" for="prompt-selector">Analysis prompt</label>
+<div class="prompt-search-container">
+<input aria-label="Search analysis prompts" class="prompt-search-input" id="prompt-search" placeholder="Search prompts" type="text"/>
+<select class="prompt-dropdown" id="prompt-selector">
+<option value="default">Default Security Analysis</option>
+</select>
+</div>
+</div></section><section class="section protection-section" id="protection-section"><div class="workflow-heading"><h2>What is sent</h2></div><p class="field-hint">Remembered for this case. Your custom rules and manual hides always apply.</p><div class="protection-grid"><div class="secret-controls" id="secret-protection">
+<label class="secret-protection-option" for="enable-secret-protection">
+<span>Secret protection</span>
+<span class="secret-protection-switch">
+<input aria-describedby="secret-protection-help" checked="" id="enable-secret-protection" role="switch" type="checkbox"/>
+<span aria-hidden="true" class="secret-switch-track"></span>
+</span>
+</label>
+<p id="secret-protection-help">Hide passwords, tokens and other credentials. Uncertain values are shown for review before sending.</p>
+<p hidden="" id="secret-protection-notice" role="status">Automatic secret protection is off. Manual hides and custom rules still apply.</p>
+</div><div id="sanitization-controls">
+<label class="checkbox-option">
+<input checked="" id="sanitize-checkbox" type="checkbox"/>
+<span>Privacy masking</span>
+</label>
+<p class="field-hint">Mask users, hosts, addresses and other private values; restored in the answer on this computer.</p><details class="advanced-options"><summary>Privacy methods</summary><div id="sanitization-methods">
+<label class="checkbox-option-small">
+<input id="enable-pattern" type="checkbox"/>
+<span>Pattern-based (IPs, usernames, emails)</span>
+</label>
+<label class="checkbox-option-small">
+<input checked="" id="enable-keywords" type="checkbox"/>
+<span>Custom Keywords</span>
+</label>
+<label class="checkbox-option-small">
+<input checked="" id="enable-jsonkeys" type="checkbox"/>
+<span>JSON Key Filtering</span>
+</label>
+</div></details></div><div class="sanitization-toggle-container" id="ti-toggle-container">
+<label class="checkbox-option">
+<input id="enable-ti" type="checkbox"/>
+<span>Threat intelligence</span>
+</label>
+<p class="field-hint">Check public IPs, domains, URLs and hashes with the selected services. Internal and hidden values are never sent.</p><details class="advanced-options"><summary>Lookup sources</summary><div id="ti-sources">
+<label class="checkbox-option-small">
+<input checked="" id="enable-ti-vt" type="checkbox"/>
+<span>VirusTotal (needs API key)</span>
+</label>
+<label class="checkbox-option-small">
+<input checked="" id="enable-ti-abuseipdb" type="checkbox"/>
+<span>AbuseIPDB (needs API key)</span>
+</label>
+<label class="checkbox-option-small">
+<input checked="" id="enable-ti-whois" type="checkbox"/>
+<span>WHOIS / RDAP — registration &amp; owner (free, no key)</span>
+</label>
+</div></details></div></div></section></section><section aria-labelledby="stage-tab-results" class="stage" data-stage="results" id="stage-results" role="tabpanel" hidden=""><div class="empty-state" id="results-empty"><p><strong>No results yet.</strong></p><p>Choose <strong>Analyze with AI</strong> below. You can also <button class="text-button" id="results-empty-ask" type="button">ask a question</button> or <button class="text-button" id="results-empty-report" type="button">write a report</button> without analyzing first.</p></div><section hidden="" id="results-workspace">
+<div aria-label="Result views" class="result-tabs" role="tablist"><div class="result-tabs-main"><button aria-controls="result-analysis" data-result-view="analysis" id="tab-analysis" role="tab" type="button">Analysis</button><button aria-controls="result-chat" data-result-view="chat" id="tab-chat" role="tab" type="button">Ask</button><button aria-controls="result-report" data-result-view="report" id="tab-report" role="tab" type="button">Report</button></div><div class="result-tabs-more" id="result-tabs-more"><span class="result-tabs-label">Details</span><button aria-controls="result-sanitized" data-result-view="sanitized" id="tab-sanitized" role="tab" type="button">Sanitized inputs</button><button aria-controls="result-changes" data-result-view="changes" id="tab-changes" role="tab" type="button">Changes</button><button aria-controls="result-ti" data-result-view="ti" id="tab-ti" role="tab" type="button">Threat intel</button><button aria-controls="result-sent" data-result-view="sent" id="tab-sent" role="tab" type="button">Sent</button><button class="text-button" id="compare-source" type="button">Compare with the logs</button></div></div>
+<div aria-labelledby="tab-analysis" id="result-analysis" role="tabpanel"><p class="field-hint">Analysis with eligible privacy values restored locally. Credentials remain hidden.</p><div class="analysis-stale" hidden="" id="analysis-stale" role="status"><span id="analysis-stale-text"></span><button class="btn btn-secondary btn-small" id="analysis-stale-btn" type="button">Re-analyze</button></div><div class="section" id="analysis-section">
+<div class="section-header"><span>🦉 AI Analysis</span></div>
+<div class="analysis-output" id="analysis-output">
+<p class="placeholder">Analysis will appear here</p>
+</div>
+<button class="btn-copy" id="copy-analysis-btn" style="display: none;">Copy analysis</button>
+</div><div class="feedback-box" id="feedback-section" style="display: none;"><details class="feedback-details" id="feedback-details"><summary>Correct this analysis</summary><p class="field-hint">Tell VEILUX what was wrong. Corrections become lessons you approve in Settings.</p>
+<textarea aria-label="Analysis correction" id="correction-textarea" placeholder="Enter correction..." rows="3"></textarea>
+<button class="btn btn-warning" id="submit-feedback-btn">📚 Submit</button>
+</details></div></div>
+<div aria-labelledby="tab-sanitized" id="result-sanitized" role="tabpanel"><p class="field-hint">Inputs prepared for analysis using your selected protection settings. Log and context previews are editable; statistics are read-only. Privacy mappings from all three appear in Changes.</p><div class="section" id="sanitized-section" style="display: none;">
+<button aria-controls="sanitized-preview" aria-expanded="true" class="section-header collapsible" id="sanitized-toggle" type="button">
+<span>Sanitized logs</span>
+<span class="toggle-icon">▼</span>
+</button>
+<div class="logs-preview" id="sanitized-preview">
+<textarea aria-label="Editable sanitized logs" id="sanitized-textarea"></textarea>
+<button class="btn-copy" id="copy-sanitized-btn">Copy sanitized logs</button>
+</div>
+</div><div class="section" id="sanitized-analyst-section" style="display: none;">
+<button aria-controls="sanitized-analyst-preview" aria-expanded="true" class="section-header collapsible" id="sanitized-analyst-toggle" type="button">
+<span>Sanitized case notes</span>
+<span class="toggle-icon">▼</span>
+</button>
+<div class="logs-preview" id="sanitized-analyst-preview">
+<textarea aria-label="Editable sanitized case notes" id="sanitized-analyst-textarea"></textarea>
+<button class="btn-copy" id="copy-sanitized-analyst-btn">Copy sanitized context</button>
+</div>
+</div><div class="section" id="sanitized-statistics-section" style="display:none;">
+<h2>Sanitized statistics</h2>
+<p class="field-hint">These are the statistics prepared for the request. Privacy rules apply when privacy sanitization is enabled; enabled credential protection also applies when privacy sanitization is off. The captured statistics above remain your local originals.</p>
+<textarea aria-label="Sanitized statistics" id="sanitized-statistics-textarea" readonly=""></textarea>
+<button class="btn-copy" id="copy-sanitized-statistics-btn">Copy sanitized statistics</button>
+</div></div>
+<div aria-labelledby="tab-changes" id="result-changes" role="tabpanel"><div class="section" id="mapping-section" style="display: none;">
+<button aria-controls="mapping-preview" aria-expanded="false" class="section-header collapsible collapsed" id="mapping-toggle" type="button">
+<span>Privacy and credential changes</span>
+<span class="toggle-icon">▼</span>
+</button>
+<div class="mapping-content collapsed" id="mapping-preview">
+<p class="field-hint">Changes include logs, case notes and statistics. Privacy values can be restored locally. Credential placeholders are listed for auditability, but their originals are intentionally withheld and never restored.</p>
+<div id="mapping-table"></div>
+<button class="btn-copy" id="copy-mapping-btn">Copy changes</button>
+</div>
+</div></div>
+<div aria-labelledby="tab-ti" id="result-ti" role="tabpanel"><div class="section" id="threat-intel-section" style="display: none;">
+<div class="section-header"><span>🛡️ Threat Intel Findings</span></div>
+<div id="threat-intel-findings"></div>
+</div></div>
+<div aria-labelledby="tab-report" id="result-report" role="tabpanel"><div class="section report-panel" id="report-section">
+<div class="report-form">
+<div class="form-row">
+<div class="form-group grow"><label for="report-template">Template</label><select id="report-template"></select></div>
+<div class="form-group"><label for="report-severity">Severity</label><select id="report-severity"></select></div>
+</div>
+<div class="form-group"><label for="report-title">Alert title</label><input id="report-title" placeholder="Written by the AI when left empty" type="text"/></div>
+<div class="form-group"><label for="report-case-id">Case or ticket ID</label><input id="report-case-id" placeholder="A placeholder is used when left empty" type="text"/></div>
+<div id="report-custom-fields"></div>
+<div class="form-group"><label for="report-extra-context">Instructions for this email · optional</label><textarea id="report-extra-context" placeholder="Who to address, the tone, or what to leave out. Facts about the case belong in Case notes, so analyses and questions see them too." rows="3"></textarea></div>
+<p class="report-subject"><span>Subject</span> <code id="report-subject-line"></code></p>
+<div class="btn-group"><button class="btn btn-primary" id="report-generate" type="button">Generate report</button></div>
+<p class="field-hint" id="report-hint"></p>
+<p class="field-hint report-included" id="report-included"></p>
+</div>
+<div class="report-output" hidden="" id="report-output">
+<iframe class="report-frame" id="report-frame" sandbox="" title="Report preview"></iframe>
+<div class="btn-group report-actions"><button class="btn btn-primary btn-small" id="report-copy-email" type="button">Copy for email</button>
+<button class="btn btn-secondary btn-small" id="report-copy-subject" type="button">Copy subject</button>
+<button class="btn btn-secondary btn-small" id="report-open" type="button">Open in a new tab</button></div>
+<details class="report-edit"><summary>Edit content</summary>
+<p class="field-hint">Change the text the AI wrote, then apply. No new AI request is made.</p>
+<textarea aria-label="Report content" class="report-content" id="report-content" rows="12" spellcheck="false"></textarea>
+<button class="btn btn-secondary btn-small" id="report-apply" type="button">Apply changes</button></details>
+</div>
+</div></div>
+<div aria-labelledby="tab-chat" id="result-chat" role="tabpanel"><div class="section chat-panel" id="chat-section">
+<p class="field-hint" id="chat-empty">Ask anything about this case: what happened, what to check next, or a draft for the client. No analysis is needed first.</p>
+<div aria-live="polite" class="chat-log" id="chat-log"></div>
+<div class="chat-form">
+<div aria-label="Quick questions" class="chat-quick" id="chat-quick" role="group"></div>
+<label class="sr-only" for="chat-question">Your question</label>
+<textarea id="chat-question" placeholder="Ask a question about this case. Ctrl+Enter sends it." rows="3"></textarea>
+<div class="chat-controls">
+<label for="chat-model">Model</label><select id="chat-model"></select>
+<button class="btn btn-primary" id="chat-send" type="button">Ask</button>
+</div>
+<p class="field-hint" id="chat-uses"></p>
+<p class="field-hint" id="chat-hint"></p>
+<div class="btn-group chat-actions"><button class="btn btn-secondary btn-small" hidden="" id="chat-copy-last" type="button">Copy answer</button>
+<button class="btn btn-secondary btn-small" hidden="" id="chat-reset" type="button">Start over</button></div>
+</div>
+</div></div>
+<div aria-labelledby="tab-sent" id="result-sent" role="tabpanel"><div class="section sent-panel" id="sent-section">
+<p class="field-hint">What left this computer for this case, newest first: each AI request with the exact protected prompt, and each threat-intelligence lookup. Cleared with the case; export it first to keep it.</p>
+<p class="field-hint" id="sent-backend"></p>
+<div class="btn-group sent-actions"><button class="btn btn-secondary btn-small" id="sent-export" type="button">Export record</button>
+<button class="btn btn-secondary btn-small" id="sent-copy" type="button">Copy record</button></div>
+<div class="sent-list" id="sent-list"></div>
+</div></div></section></section><section aria-labelledby="stage-tab-tools" class="stage" data-stage="tools" id="stage-tools" role="tabpanel" hidden=""><div aria-label="Tools" class="subtabs" id="tools-tabs" role="tablist"><button aria-controls="indicators-content" aria-expanded="false" class="subtab" id="indicators-toggle" role="tab" type="button"><span>Case indicators</span><span class="subtab-count" id="indicators-count"></span></button><button aria-controls="ioc-lookup-content" aria-expanded="false" class="subtab" id="ioc-lookup-toggle" role="tab" type="button"><span>Check an indicator</span></button><button aria-controls="defang-content" aria-expanded="false" class="subtab" id="defang-toggle" role="tab" type="button"><span>Defang / refang</span></button></div><div class="section sub-panel" id="tools-panel-indicators"><div class="indicators-content" id="indicators-content">
+<p class="field-hint" id="indicators-hint"></p>
+<div class="indicators-toolbar" hidden="" id="indicators-toolbar">
+<label class="ind-all"><input id="indicators-select-all" type="checkbox"/> <span>All</span></label>
+<select aria-label="Show indicators of type" id="indicators-type"></select>
+<span class="ind-actions"><button class="btn btn-primary btn-small" id="indicators-check" type="button">Check all</button>
+<button class="btn btn-secondary btn-small" id="indicators-copy-plain" type="button">Copy</button>
+<button class="btn btn-secondary btn-small" id="indicators-copy" type="button">Copy defanged</button>
+<button class="btn btn-secondary btn-small" id="indicators-csv" type="button">Export CSV</button></span>
+</div>
+<div aria-label="Indicators found in the logs" class="indicators-list" id="indicators-list" role="list"></div>
+<p class="empty-state" id="indicators-empty"></p>
+</div></div><div class="section sub-panel" hidden="" id="tools-panel-ioc"><div class="defang-content" id="ioc-lookup-content">
+<p class="field-hint">Check sends this indicator to the selected services and requests fresh data. WHOIS works without a key. These source choices also apply to automatic enrichment.</p>
+<fieldset class="ioc-sources"><legend>Lookup sources</legend>
+<label class="checkbox-option-small"><input checked="" id="manual-ti-vt" type="checkbox"/><span>VirusTotal (needs API key)</span></label>
+<label class="checkbox-option-small"><input checked="" id="manual-ti-abuse" type="checkbox"/><span>AbuseIPDB (IP addresses, needs API key)</span></label>
+<label class="checkbox-option-small"><input checked="" id="manual-ti-whois" type="checkbox"/><span>WHOIS / RDAP (free, no key)</span></label>
+</fieldset>
+<div class="ioc-lookup-row">
+<input aria-label="Indicator to check" id="ioc-lookup-input" placeholder="IP, domain, URL or hash" type="text"/>
+<button class="btn btn-primary btn-small" id="ioc-lookup-btn">🔍 Check</button>
+</div>
+<div id="ioc-lookup-result"></div>
+</div></div><div class="section sub-panel" hidden="" id="tools-panel-defang"><div class="defang-content" id="defang-content">
+<textarea aria-label="Indicators to defang or refang" id="defang-input" placeholder="Paste URLs, IPs, domains..."></textarea>
+<div class="defang-buttons">
+<button class="btn btn-warning btn-small" id="defang-btn">🔒 Defang</button>
+<button class="btn btn-primary btn-small" id="refang-btn">🔓 Refang</button>
+<button class="btn btn-secondary btn-small" id="copy-defang-btn">📋 Copy</button>
+</div>
+<textarea aria-label="Converted indicators" id="defang-output" placeholder="Result..." readonly=""></textarea>
+</div></div></section></main><footer aria-label="Analysis actions" class="workflow-dock"><div class="manual-actions"><button class="btn btn-secondary btn-small" disabled="" id="hide-selection-btn">Hide selected text</button><button class="btn btn-secondary btn-small" disabled="" id="undo-hide-btn">Undo</button><span class="field-hint">Select text in an input or preview to hide it.</span><p aria-live="polite" id="manual-hide-status" role="status"></p></div><div class="dock-main"><div class="dock-status"><div aria-live="polite" class="status-bar" id="status-bar" role="status">
+<span id="status-text">Ready</span><button class="status-more" hidden="" id="status-more" type="button">More</button>
+<span id="log-count">0 logs</span>
+</div><p class="field-hint dock-uses" id="analyze-uses"></p></div><div class="dock-buttons" id="main-actions"><button class="btn btn-secondary" id="ask-btn" title="Ask follow-up questions about this case" type="button">Ask</button><button class="btn btn-secondary" id="report-btn" title="Write an escalation email for this case" type="button">Report</button><button class="btn btn-success btn-large" disabled="" id="analyze-btn">🧠 Analyze with AI</button><button class="btn btn-success" hidden="" id="copy-result-action" type="button">Copy result</button></div><div class="dock-buttons" hidden="" id="review-actions"><button class="btn btn-secondary btn-small" id="secret-review-cancel">Cancel</button><button class="btn btn-success btn-small" id="secret-review-continue">Continue safely</button></div></div></footer><div aria-label="Work in progress" class="loading-overlay" id="loading-overlay" role="dialog" style="display: none;">
+<div class="spinner"></div>
+<p id="loading-text">Analyzing...</p>
+<p class="field-hint" hidden="" id="loading-hint">This continues if you close the popup. Results appear here, or the next time you open it.</p>
+<button class="btn btn-secondary btn-small" id="loading-dismiss-btn" style="margin-top:10px;">Cancel</button>
+</div></div>
+<script src="browser-polyfill.js"></script>
+<script src="backend_address.js"></script>
+<script src="cases.js"></script>
+<script src="site_access.js"></script>
+<script src="openrouter_models.js"></script>
+<script src="secret_review.js"></script>
+<script src="connector_config.js"></script>
+<script src="connector_parameters.js"></script>
+<script src="connector_sources.js"></script>
+<script src="connector_client.js"></script>
+<script src="connector_browser.js"></script>
+<script src="extraction_jobs.js"></script>
+<script src="custom_models.js"></script>
+<script src="threat_intel.js"></script>
+<script src="html.js"></script>
+<script src="popup.js"></script>
+<script src="popup_ui.js"></script>
+<script src="case_notes.js"></script>
+<script src="report_templates.js"></script>
+<script src="report_panel.js"></script>
+<script src="chat_questions.js"></script>
+<script src="chat_panel.js"></script>
+<script src="sent_panel.js"></script>
+<script src="indicators_panel.js"></script>
+<script src="cases_ui.js"></script></body>
+</html>

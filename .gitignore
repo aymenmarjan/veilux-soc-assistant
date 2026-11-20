@@ -1,0 +1,24 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Files the backend writes next to itself (lookup results and your lessons)
+threat_intel_cache.json
+training_feedback.json
+*.log
+
+# Local secrets and exports: never commit these
+.env
+veilux_backend.key
+config.json
+veilux-settings*.json
+
+# Tools and packaging
+node_modules/
+*.zip
+*.xpi
+/dist/
+/build/

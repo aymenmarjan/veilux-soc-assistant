@@ -1,0 +1,17 @@
+{
+  "name": "veilux-browser-check",
+  "private": true,
+  "description": "Checks that the VEILUX extension loads and runs in Firefox and Chromium-based browsers. See docs/BROWSER_TESTING.md.",
+  "type": "module",
+  "scripts": {
+    "check": "node check.mjs",
+    "firefox": "web-ext run --source-dir ../../extension --target firefox-desktop",
+    "chromium": "web-ext run --source-dir ../../extension --target chromium"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "eslint-plugin-compat": "^6.0.0",
+    "web-ext": "^10.0.0"
+  },
+  "license": "Apache-2.0"
+}

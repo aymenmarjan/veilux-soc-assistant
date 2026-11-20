@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VEILUX report</title>
+<link href="icons/icon32.png" rel="icon"/>
+<script src="theme.js"></script>
+<link href="ui.css" rel="stylesheet"/>
+</head>
+<body class="report-view-page">
+<header class="report-view-bar">
+<div><p class="brand-name">VEILUX</p><p class="field-hint" id="report-view-subject">Loading the report…</p></div>
+<div class="btn-group"><button class="btn btn-primary btn-small" id="report-view-copy" type="button">Copy for email</button>
+<button class="btn btn-secondary btn-small" id="report-view-copy-subject" type="button">Copy subject</button></div>
+<p aria-live="polite" class="field-hint" id="report-view-status" role="status"></p>
+</header>
+<iframe class="report-view-frame" id="report-view-frame" sandbox="" title="Report"></iframe>
+<script src="browser-polyfill.js"></script>
+<script src="cases.js"></script>
+<script src="report_templates.js"></script>
+<script src="report_view.js"></script>
+</body>
+</html>

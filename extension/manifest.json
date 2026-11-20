@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "name": "VEILUX",
+  "short_name": "VEILUX",
+  "version": "1.0.0",
+  "homepage_url": "https://github.com/aymenmarjan/veilux-soc-assistant",
+  "description": "Secure AI SOC Assistant. Configurable SIEM/SOAR connections, local and external AI, and privacy protection.",
+  "minimum_chrome_version": "121",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "veilux-soc-assistant@veilux.local",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "websiteContent"
+        ]
+      }
+    }
+  },
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "cookies",
+    "scripting",
+    "storage",
+    "unlimitedStorage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": [
+      "browser-polyfill.js",
+      "backend_address.js",
+      "cases.js",
+      "connector_config.js",
+      "connector_parameters.js",
+      "connector_sources.js",
+      "connector_client.js",
+      "connector_browser.js",
+      "extraction_jobs.js",
+      "background.js"
+    ]
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "VEILUX: Secure AI SOC Assistant",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

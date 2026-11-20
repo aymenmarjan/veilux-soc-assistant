@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VEILUX Settings</title>
+<link href="icons/icon32.png" rel="icon"/>
+<script src="theme.js"></script>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      min-width: 600px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background:linear-gradient(135deg, var(--accent-2) 0%, var(--accent-2) 100%);
+      color:var(--text);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container { max-width: 700px; margin: 0 auto; }
+    
+    h1 { text-align: center; margin-bottom: 24px; font-size: 24px; }
+    h2 { font-size: 16px; margin-bottom: 12px; color:var(--warning); }
+    h3 { font-size: 14px; margin-bottom: 8px; color:var(--accent); }
+    
+    .section {
+      background:var(--surface-alt);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px; }
+    
+    input[type="text"], input[type="password"], textarea, select {
+      width: 100%;
+      padding: 10px;
+      border:1px solid var(--line);
+      border-radius: 4px;
+      background:var(--inset);
+      color:var(--text);
+      font-size: 13px;
+    }
+
+    select option { background:var(--surface); color:var(--text); }
+
+    input:focus, textarea:focus, select:focus { outline: none; border-color:var(--accent-2); }
+    
+    .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary { background:var(--accent-2); color: white; }
+    .btn-success { background:var(--success); color: white; }
+    .btn-danger { background:var(--danger); color: white; }
+    .btn-warning { background:var(--warning); color: white; }
+    .btn-secondary { background:var(--muted); color: white; }
+    .btn-small { padding: 6px 10px; font-size: 11px; }
+    
+    .btn-group { display: flex; gap: 8px; margin-top: 16px; }
+    
+    #success-msg {
+      display: none;
+      background:rgba(52,211,153,0.3);
+      border:1px solid var(--success);
+      padding: 12px;
+      border-radius: 4px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    
+    #api-test-results, #sanitization-test-result { margin-top: 12px; }
+    
+    /* Toggle Switch */
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      background:var(--inset);
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    
+    .toggle-switch {
+      position: relative;
+      width: 50px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+    
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color:var(--muted);
+      transition: 0.3s;
+      border-radius: 26px;
+    }
+    
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+    
+    input:checked + .toggle-slider { background-color:var(--success); }
+    input:checked + .toggle-slider:before { transform: translateX(24px); }
+    
+    .toggle-label { font-size: 14px; font-weight: 600; }
+    .toggle-desc { font-size: 11px; color:var(--muted); margin-top: 2px; }
+    
+    /* List Items */
+    .list-container {
+      background:var(--inset);
+      border-radius: 6px;
+      padding: 12px;
+      margin-top: 10px;
+    }
+    
+    .list-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      background:var(--surface-alt);
+      border-radius: 4px;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+    
+    .list-item:last-child { margin-bottom: 0; }
+    
+    .list-item input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    
+    .list-item-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    
+    .list-item-key {
+      font-family: 'Courier New', monospace;
+      background:rgba(0,200,248,0.3);
+      padding: 2px 8px;
+      border-radius: 3px;
+      color:var(--accent);
+    }
+    
+    .list-item-arrow { color:var(--muted); }
+    
+    .list-item-value {
+      font-family: 'Courier New', monospace;
+      background:rgba(52,211,153,0.3);
+      padding: 2px 8px;
+      border-radius: 3px;
+      color:var(--success);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .list-item-actions {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    
+    .btn-icon {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      border-radius: 4px;
+    }
+    
+    /* Add Form */
+    .add-form {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .add-form input {
+      flex: 1;
+      min-width: 120px;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+    
+    .add-form-row {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+    
+    .empty-list {
+      color:var(--muted);
+      font-style: italic;
+      font-size: 12px;
+      text-align: center;
+      padding: 15px;
+    }
+    
+    /* Prompt Management */
+    .prompt-list { margin-top: 12px; }
+    
+    .prompt-item {
+      background:var(--inset);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    
+    .prompt-item.editing { background:rgba(0,200,248,0.2); border:1px solid var(--accent-2); }
+    
+    .prompt-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .prompt-title { font-weight: 600; font-size: 14px; }
+    
+    .prompt-content {
+      font-size: 12px;
+      color:var(--muted);
+      background:var(--inset);
+      padding: 8px;
+      border-radius: 4px;
+      max-height: 60px;
+      overflow: hidden;
+    }
+    
+    .prompt-actions { display: flex; gap: 6px; }
+    
+    .badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-left: 8px;
+    }
+    .badge-custom { background:var(--accent-2); }
+    .badge-default { background:var(--accent-2); }
+    
+    .add-prompt-form {
+      display: none;
+      background:var(--inset);
+      border-radius: 6px;
+      padding: 12px;
+      margin-top: 12px;
+    }
+    .add-prompt-form.visible { display: block; }
+    
+    .info-box {
+      background:rgba(0,200,248,0.2);
+      border:1px solid var(--accent-2);
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    
+    .info-box code {
+      background:var(--inset);
+      padding: 1px 4px;
+      border-radius: 2px;
+    }
+    
+    /* Subsection */
+    .subsection {
+      border-left:3px solid var(--accent-2);
+      padding-left: 12px;
+      margin-top: 16px;
+      margin-bottom: 16px;
+    }
+    
+    .subsection.disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+  </style>
+<link href="ui.css" rel="stylesheet"/></head>
+<body class="settings-page">
+<div class="container"><header class="settings-heading brand-bar"><img alt="VEILUX logo" class="brand-logo" height="84" src="icons/logo-portrait.png" width="84"/><div><p class="brand-name">VEILUX</p><p class="brand-tagline">Secure AI SOC Assistant</p><h1>Settings</h1><p class="field-hint">Configure connections, models and protection in one place.</p></div></header><div class="settings-layout"><nav aria-label="Settings sections" class="settings-nav">
+<p class="settings-nav-group" id="nav-group-sources">Sources</p>
+<div class="settings-nav-links" role="group" aria-labelledby="nav-group-sources">
+<a href="#connections">Connections</a>
+<a href="#extraction">Extraction output</a>
+</div>
+<p class="settings-nav-group" id="nav-group-ai">AI</p>
+<div class="settings-nav-links" role="group" aria-labelledby="nav-group-ai">
+<a href="#ai">Providers and keys</a>
+<a href="#models">Your models</a>
+<a href="#prompts">Prompts</a>
+<a href="#lessons">Lessons</a>
+</div>
+<p class="settings-nav-group" id="nav-group-protection">Protection</p>
+<div class="settings-nav-links" role="group" aria-labelledby="nav-group-protection">
+<a href="#protection">Privacy masking</a>
+<a href="#rules">Custom rules</a>
+<a href="#detection">Credential detection</a>
+<a href="#threat-intel">Threat intelligence</a>
+</div>
+<p class="settings-nav-group" id="nav-group-reports">Reports</p>
+<div class="settings-nav-links" role="group" aria-labelledby="nav-group-reports">
+<a href="#reports">Email templates</a>
+</div>
+<p class="settings-nav-group" id="nav-group-general">General</p>
+<div class="settings-nav-links" role="group" aria-labelledby="nav-group-general">
+<a href="#cases">Cases</a>
+<a href="#backend">Backend</a>
+<a href="#appearance">Appearance</a>
+<a href="#backup">Backup and reset</a>
+</div>
+</nav>
+<div class="site-access-banner" data-site-access="" hidden="" id="site-access" role="alert"></div><main id="settings-main">
+<p class="settings-group-label">Sources</p>
+<section aria-label="Connections" class="settings-group" id="connections"><div class="section">
+<h2>SIEM / SOAR connections</h2>
+<p class="field-hint">A connection tells VEILUX where to read logs: from a table or JSON on the page, or from your platform's API. Pick a platform template or set one up in a few steps.</p>
+<div class="prompt-list" id="connector-list">
+</div>
+<div class="site-access-banner" hidden id="connector-set-aside" role="status"><span id="connector-set-aside-text"></span> <button class="btn btn-secondary btn-small" id="connector-set-aside-remove" type="button">Remove them</button></div>
+<button class="btn btn-success" id="add-connector-trigger" type="button">Add a connection</button>
+<div class="add-prompt-form connector-editor" id="connector-form">
+<section aria-labelledby="conn-step-basics" class="conn-step">
+<h3 id="conn-step-basics"><span class="step-number">1</span> Basics</h3>
+<div class="form-group">
+<label for="conn-preset">Platform template (optional)</label>
+<select id="conn-preset">
+<option value="">None, I'll set it up myself</option>
+<optgroup label="Splunk">
+<option value="splunk_results">Splunk: results of the search on screen</option>
+<option value="splunk">Splunk: run a search (SPL)</option>
+</optgroup>
+<optgroup label="Microsoft">
+<option value="sentinel_incident">Microsoft Sentinel: incident and its alerts (Azure portal)</option>
+<option value="sentinel">Microsoft Sentinel / Azure Monitor Logs: KQL query</option>
+<option value="defender_incident">Microsoft Defender portal: incident and its alerts (Microsoft Graph)</option>
+</optgroup>
+<optgroup label="Elasticsearch, OpenSearch and Wazuh">
+<option value="elastic_search">Elasticsearch / OpenSearch / Wazuh indexer: search</option>
+<option value="elastic_document">Elasticsearch / OpenSearch / Wazuh indexer: document from Discover</option>
+<option value="opensearch">OpenSearch Dashboards / Wazuh dashboard: browser login</option>
+</optgroup>
+<optgroup label="IBM">
+<option value="qradar">IBM QRadar: offense and its events</option>
+</optgroup>
+</select>
+<p class="field-hint">A template fills in the technical settings for a known platform. Your name and website address are kept, and everything stays editable.</p>
+<p class="field-hint" id="conn-preset-note" role="status"></p>
+</div>
+<div class="form-group">
+<label for="conn-name">Connection name</label>
+<input id="conn-name" placeholder="For example, Main SIEM" type="text"/>
+</div>
+<div class="form-group">
+<label for="conn-siem-address">Website address</label>
+<input id="conn-siem-address" placeholder="https://siem.example.com" type="text"/>
+<p class="field-hint">The console you open in your browser. VEILUX uses this connection on that website.</p>
+</div>
+</section>
+<section aria-labelledby="conn-step-source" class="conn-step">
+<h3 id="conn-step-source"><span class="step-number">2</span> Where are the logs?</h3>
+<fieldset class="choice-cards" id="conn-source-choice">
+<legend class="visually-hidden">Read logs from</legend>
+<label class="choice-card"><input id="conn-source-table" name="conn-source" type="radio" value="table"/><span><strong>A table on the page</strong><small>Reads the rows of a table shown in your browser. No API needed.</small></span></label>
+<label class="choice-card"><input id="conn-source-json" name="conn-source" type="radio" value="json"/><span><strong>JSON shown on the page</strong><small>Reads JSON text displayed on the page, for example inside a &lt;pre&gt; block.</small></span></label>
+<label class="choice-card"><input id="conn-source-api" name="conn-source" type="radio" value="api"/><span><strong>An API request</strong><small>Calls the platform's API. Values such as a record ID can come from the page, its address or its links.</small></span></label>
+<label class="choice-card"><input id="conn-source-inspector" name="conn-source" type="radio" value="inspector"/><span><strong>The search Inspector panel</strong><small>Reads the current search through the page's Inspector panel (OpenSearch Dashboards and Wazuh).</small></span></label>
+<label class="choice-card"><input id="conn-source-script" name="conn-source" type="radio" value="script"/><span><strong>My own page script</strong><small>Advanced: runs JavaScript you provide on the page.</small></span></label>
+</fieldset>
+<div class="conn-panel" id="conn-table-panel">
+<p class="field-hint conn-fallback-note">Used when the page provides no request values.</p>
+<fieldset class="inline-choice">
+<legend>Which table?</legend>
+<label><input id="conn-table-auto" name="conn-table-choice" type="radio" value="auto"/> The largest visible table</label>
+<label><input id="conn-table-specific" name="conn-table-choice" type="radio" value="specific"/> A specific table</label>
+</fieldset>
+<div id="conn-table-specific-fields">
+<div class="form-group">
+<label for="conn-table-selector">Table selector</label>
+<input id="conn-table-selector" placeholder="table#events" type="text"/>
+<p class="field-hint">Open the page in another tab, then use <strong>Find tables on the open page</strong> and pick one. You can also type a CSS selector.</p>
+</div>
+<button class="btn btn-secondary" id="conn-find-tables" type="button">Find tables on the open page</button>
+<div class="table-finder" id="conn-table-list" role="status"></div>
+</div>
+</div>
+<div class="conn-panel" id="conn-json-panel">
+<p class="field-hint conn-fallback-note">Used when the page provides no request values.</p>
+<div class="form-group">
+<label for="conn-json-selector">Element that contains the JSON</label>
+<input id="conn-json-selector" placeholder="pre" type="text"/>
+<p class="field-hint">A CSS selector, such as pre or #event-json. The element's text must be valid JSON.</p>
+</div>
+</div>
+<div class="conn-panel" id="conn-inspector-panel">
+<p class="field-hint conn-fallback-note">Used when the page provides no request values.</p>
+<p class="field-hint">Open a search, then extract. VEILUX opens the Inspector panel, reads its response and closes it again.</p>
+<details class="model-details">
+<summary>Inspector element selectors (change only if your version differs)</summary>
+<div class="form-group"><label for="conn-open-btn">Open Inspector button</label><input id="conn-open-btn" placeholder='[data-test-subj="openInspectorButton"]' type="text"/></div>
+<div class="form-group"><label for="conn-response-tab">Response tab</label><input id="conn-response-tab" placeholder='[data-test-subj="inspectorRequestDetailResponse"]' type="text"/></div>
+<div class="form-group"><label for="conn-response-body">Response JSON</label><input id="conn-response-body" placeholder='[data-test-subj="inspectorResponseBody"]' type="text"/></div>
+<div class="form-group"><label for="conn-close-btn">Close Inspector button</label><input id="conn-close-btn" placeholder='[data-test-subj="euiFlyoutCloseButton"]' type="text"/></div>
+<div class="form-group"><label for="conn-hits-path">Records location inside the response</label><input id="conn-hits-path" placeholder="hits.hits" type="text"/></div>
+<div class="form-group"><label for="conn-total-path">Total location inside the response</label><input id="conn-total-path" placeholder="hits.total" type="text"/></div>
+<div class="form-group"><label for="conn-request-tab">Request tab</label><input id="conn-request-tab" placeholder='[data-test-subj="inspectorRequestDetailRequest"]' type="text"/></div>
+<div class="form-group"><label for="conn-request-body">Request JSON</label><input id="conn-request-body" placeholder='[data-test-subj="inspectorRequestBody"]' type="text"/></div>
+<div class="form-group"><label for="conn-request-url">Request URL</label><input id="conn-request-url" placeholder='[data-test-subj="inspectorRequestUrl"]' type="text"/></div>
+<div class="form-group"><label for="conn-statistics-tab">Statistics tab</label><input id="conn-statistics-tab" placeholder='[data-test-subj="inspectorRequestDetailStatistics"]' type="text"/></div>
+</details>
+</div>
+<div class="conn-panel" id="conn-script-panel">
+<p class="field-hint conn-fallback-note">Used when the page provides no request values.</p>
+<div class="form-group">
+<label for="conn-custom-script">Page extraction script</label>
+<textarea id="conn-custom-script" placeholder="return {logs: []};" rows="4"></textarea>
+<p class="field-hint">Runs JavaScript in the page. Use only scripts you trust. Return {logs: [...]} with JSON records or strings. Helpers include waitForElement, readCodeBlockText and getByPath.</p>
+</div>
+</div>
+</section>
+<section aria-labelledby="conn-step-api" class="conn-step" id="conn-api-step">
+<h3 id="conn-step-api"><span class="step-number">3</span> API request</h3>
+<div class="form-group">
+<label for="conn-siem-base-url">API address</label>
+<input id="conn-siem-base-url" placeholder="https://siem.example.com" type="text"/>
+<p class="field-hint">Filled from the website address. Change it only when the API uses another host, port or path prefix.</p>
+</div>
+<div class="form-group">
+<label for="conn-fetch-mode">How the API answers</label>
+<select id="conn-fetch-mode">
+<option value="single_request">It returns the records in the response</option>
+<option value="search_job">It starts a search job, then returns the results when the job finishes</option>
+</select>
+</div>
+<div id="conn-single-fields">
+<div class="form-row">
+<div class="form-group">
+<label for="conn-api-method">Method</label>
+<select id="conn-api-method">
+<option value="GET">GET</option>
+<option value="POST">POST</option>
+</select>
+</div>
+<div class="form-group grow">
+<label for="conn-api-path">Path</label>
+<input id="conn-api-path" placeholder="/api/events/${event_id}" type="text"/>
+</div>
+</div>
+<p class="field-hint">Relative to the API address. Write <code>${name}</code> wherever a value from the page belongs, and <code>${query}</code> for the default search.</p>
+<div class="form-group">
+<label for="conn-api-query">URL query parameters (optional, JSON)</label>
+<textarea id="conn-api-query" placeholder='{"limit":"100","tenant":"${tenant}"}' rows="2"></textarea>
+</div>
+<div class="form-group" id="conn-api-body-group">
+<label for="conn-api-body">Request body (JSON)</label>
+<textarea id="conn-api-body" placeholder='{"query":"${query}"}' rows="3"></textarea>
+</div>
+</div>
+<div id="conn-job-fields">
+<p class="field-hint">Search-job APIs work in three steps: start a search, check its status, then read its results. Platform templates fill these in.</p>
+<fieldset class="sub-group"><legend>1. Start the search</legend>
+<div class="form-row">
+<div class="form-group"><label for="conn-job-create-method">Method</label><select id="conn-job-create-method"><option value="GET">GET</option><option value="POST">POST</option></select></div>
+<div class="form-group grow"><label for="conn-job-create-path">Path</label><input id="conn-job-create-path" placeholder="/api/searches" type="text"/></div>
+</div>
+<div class="form-group"><label for="conn-job-create-query">Start parameters (JSON)</label><textarea id="conn-job-create-query" placeholder='{"search":"${query}"}' rows="2"></textarea></div>
+<div class="form-group"><label for="conn-job-parameters-as">Send the start parameters as</label><select id="conn-job-parameters-as"><option value="query">URL query parameters</option><option value="form">A form body (application/x-www-form-urlencoded)</option></select>
+<p class="field-hint">Some APIs, such as Splunk's, document a form body for starting a search.</p></div>
+<div class="form-group"><label for="conn-job-create-body">Body (JSON, optional)</label><textarea id="conn-job-create-body" placeholder='{"query":"${query}"}' rows="2"></textarea></div>
+<div class="form-group"><label for="conn-job-query-parameter">Query parameter that receives the default search (optional)</label><input id="conn-job-query-parameter" placeholder="search" type="text"/>
+<p class="field-hint">For APIs that take the search in a URL parameter. Otherwise write ${query} in the body or path.</p></div>
+<div class="form-group"><label for="conn-job-id-path">Where the search ID is in the response</label><input id="conn-job-id-path" placeholder="id" type="text"/></div>
+</fieldset>
+<fieldset class="sub-group"><legend>2. Check the status</legend>
+<div class="form-group"><label for="conn-job-status-path">Path</label><input id="conn-job-status-path" placeholder="/api/searches/${job_id}" type="text"/></div>
+<div class="form-group"><label for="conn-job-status-field">Where the status is in the response</label><input id="conn-job-status-field" placeholder="status" type="text"/></div>
+<div class="form-row">
+<div class="form-group grow"><label for="conn-job-complete-values">Finished when status is</label><input id="conn-job-complete-values" placeholder="DONE, COMPLETED" type="text"/></div>
+<div class="form-group grow"><label for="conn-job-error-values">Failed when status is</label><input id="conn-job-error-values" placeholder="FAILED, ERROR" type="text"/></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label for="conn-job-error-message">Where a failed search explains why (optional)</label><input id="conn-job-error-message" placeholder="messages" type="text"/></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label for="conn-job-poll-interval">Check every (seconds)</label><input id="conn-job-poll-interval" placeholder="2" type="number"/></div>
+<div class="form-group"><label for="conn-job-timeout">Give up after (seconds)</label><input id="conn-job-timeout" placeholder="90" type="number"/></div>
+</div>
+</fieldset>
+<fieldset class="sub-group"><legend>3. Read the results</legend>
+<div class="form-group"><label for="conn-job-results-path">Path</label><input id="conn-job-results-path" placeholder="/api/searches/${job_id}/results" type="text"/></div>
+</fieldset>
+</div>
+<div class="form-group">
+<label for="conn-default-query">Default search (optional)</label>
+<textarea id="conn-default-query" placeholder="A search in your platform's query language" rows="2"></textarea>
+<p class="field-hint">Fills <code>${query}</code> when the page gives no values.</p>
+</div>
+<div class="form-group">
+<label for="conn-api-headers">Extra request headers (optional, JSON)</label>
+<textarea id="conn-api-headers" placeholder='{"Accept":"application/json"}' rows="2"></textarea>
+<p class="field-hint">For example an API version header. Sign-in headers are set in step 5.</p>
+</div>
+<div id="conn-records-home"></div>
+<div id="conn-records-panel">
+<h4>Where are the records in the JSON?</h4>
+<div class="form-group">
+<label for="conn-response-path">Records location</label>
+<input id="conn-response-path" placeholder="data.events" type="text"/>
+<p class="field-hint">Dot path to the list of records, such as data.events or tables.0.rows. Leave blank when the whole JSON is the list. Not sure? Use <strong>Find it from a sample</strong> below.</p>
+</div>
+<div class="form-group">
+<label for="conn-record-format">Record layout</label>
+<select id="conn-record-format">
+<option value="objects">Each record is an object with named fields</option>
+<option value="columns">Column names and rows are listed separately</option>
+</select>
+</div>
+<div class="form-group" id="conn-columns-fields">
+<label for="conn-columns-path">Column names location</label>
+<input id="conn-columns-path" placeholder="tables.0.columns" type="text"/>
+<p class="field-hint">A list of names, or of objects with a name field.</p>
+</div>
+<div class="form-group">
+<label for="conn-total-records-path">Total number of matches location (optional)</label>
+<input id="conn-total-records-path" placeholder="data.total" type="text"/>
+</div>
+<details class="model-details" id="conn-sample-details">
+<summary>Find it from a sample</summary>
+<p class="field-hint">Paste an example JSON response. Nothing is sent or saved.</p>
+<div class="form-group">
+<label for="conn-sample-response">Sample JSON</label>
+<textarea id="conn-sample-response" placeholder='{"data":{"events":[{"user":"alice"}]}}' rows="3"></textarea>
+</div>
+<button class="btn btn-secondary" id="conn-inspect-sample" type="button">List possible locations</button>
+<div class="form-group">
+<label for="conn-sample-path">Records location in the sample</label>
+<select id="conn-sample-path"><option value="">Whole response</option></select>
+</div>
+<button class="btn btn-secondary" id="conn-preview-sample" type="button">Preview records</button>
+<pre id="conn-sample-result" role="status"></pre>
+</details>
+</div>
+<details class="model-details" id="conn-pagination-details">
+<summary>Read several pages of results (optional)</summary>
+<div class="form-group">
+<label for="conn-pagination-mode">Pagination</label>
+<select id="conn-pagination-mode">
+<option value="none">One response only</option>
+<option value="offset">Offset in a URL parameter</option>
+<option value="cursor">Next-page token in a URL parameter</option>
+</select>
+<p class="field-hint">For a search job, pages apply to reading the results, by offset only.</p>
+</div>
+<div id="conn-pagination-fields">
+<div class="form-row">
+<div class="form-group grow"><label for="conn-pagination-parameter">Offset or token parameter</label><input id="conn-pagination-parameter" placeholder="offset" type="text"/></div>
+<div class="form-group grow"><label for="conn-pagination-size-parameter">Page-size parameter (optional)</label><input id="conn-pagination-size-parameter" placeholder="limit" type="text"/></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label for="conn-page-size">Records per page</label><input id="conn-page-size" placeholder="100" type="number"/></div>
+<div class="form-group"><label for="conn-max-pages">Maximum pages</label><input id="conn-max-pages" placeholder="10" type="number"/></div>
+</div>
+<div class="form-group" id="conn-cursor-group"><label for="conn-cursor-path">Where the next-page token is in the response</label><input id="conn-cursor-path" placeholder="nextCursor" type="text"/></div>
+</div>
+</details>
+<details class="model-details" id="conn-context-details">
+<summary>Also read a case summary (optional)</summary>
+<p class="field-hint">A second GET request whose result is shown with the records and can be used as <code>${context.field}</code> in a search job. It is not counted in statistics.</p>
+<div class="form-group"><label for="conn-context-path">Path</label><input id="conn-context-path" placeholder="/api/cases/${case_id}" type="text"/></div>
+<div class="form-group"><label for="conn-context-response-path">Location in the response (optional)</label><input id="conn-context-response-path" placeholder="data.case" type="text"/></div>
+</details>
+</section>
+<section aria-labelledby="conn-step-values" class="conn-step" id="conn-values-step">
+<h3 id="conn-step-values"><span class="step-number">4</span> Request values</h3>
+<p class="field-hint">Each <code>${name}</code> in the request is filled from a value source. Add one source for each value the request needs.</p>
+<div class="placeholder-check" id="conn-placeholders" role="status"></div>
+<div id="conn-values"></div>
+<p class="add-value-label" id="conn-add-value-label">Add a value from:</p>
+<div aria-labelledby="conn-add-value-label" class="add-value-buttons" role="group">
+<button class="btn btn-secondary btn-small" data-add-value="url" type="button">The page address</button>
+<button class="btn btn-secondary btn-small" data-add-value="links" type="button">Links on a page</button>
+<button class="btn btn-secondary btn-small" data-add-value="text" type="button">Text on a page</button>
+<button class="btn btn-secondary btn-small" data-add-value="attribute" type="button">An element attribute</button>
+<button class="btn btn-secondary btn-small" data-add-value="fixed" type="button">A fixed value</button>
+</div>
+<div class="form-group" id="conn-copy-values-group">
+<label for="conn-copy-values">Or copy case-platform value sources from another connection</label>
+<select id="conn-copy-values"><option value="">Choose a connection</option></select>
+</div>
+<div class="form-group">
+<label for="conn-api-fallback">When the current page provides none of these values</label>
+<select id="conn-api-fallback">
+<option value="request">Send the request anyway, with fixed values and the default search</option>
+<option value="table">Read a table on the page instead</option>
+<option value="json">Read JSON shown on the page instead</option>
+<option value="inspector">Read the search Inspector panel instead</option>
+<option value="script">Run my own page script instead</option>
+</select>
+<p class="field-hint">The page reader you choose here is configured in step 2.</p>
+</div>
+</section>
+<section aria-labelledby="conn-step-signin" class="conn-step" id="conn-signin-step">
+<h3 id="conn-step-signin"><span class="step-number">5</span> Sign-in</h3>
+<div class="form-group">
+<label for="conn-auth-type">How VEILUX signs in to the API</label>
+<select id="conn-auth-type">
+<option value="browser_session">Use my current browser login</option>
+<option value="header">API key or access token</option>
+<option value="oauth_client_credentials">App sign-in (OAuth 2.0 client credentials)</option>
+<option value="basic">Username and password</option>
+<option value="cookie">One named browser cookie</option>
+<option value="none">No sign-in needed</option>
+</select>
+<p class="field-hint" id="conn-auth-help"></p>
+</div>
+<div class="form-group" id="conn-cookie-name-group">
+<label for="conn-cookie-name">Cookie name</label>
+<input id="conn-cookie-name" placeholder="session" type="text"/>
+</div>
+<div id="conn-header-auth-group">
+<div class="form-group">
+<label for="conn-header-name">Header name</label>
+<input id="conn-header-name" placeholder="Authorization" type="text"/>
+</div>
+<div class="form-group">
+<label for="conn-header-value">API key or token</label>
+<input id="conn-header-value" placeholder="Bearer your-token" type="password"/>
+<p class="field-hint">Include any prefix the API expects, such as Bearer. Stored for this connection only.</p>
+</div>
+</div>
+<div id="conn-oauth-group">
+<div class="form-group"><label for="conn-oauth-token-url">Token address</label><input id="conn-oauth-token-url" placeholder="https://login.example.com/oauth2/token" type="text"/></div>
+<div class="form-row">
+<div class="form-group grow"><label for="conn-oauth-client-id">Client ID</label><input id="conn-oauth-client-id" type="text"/></div>
+<div class="form-group grow"><label for="conn-oauth-client-secret">Client secret</label><input id="conn-oauth-client-secret" type="password"/></div>
+</div>
+<div class="form-group"><label for="conn-oauth-scope">Scope (optional)</label><input id="conn-oauth-scope" placeholder="https://api.example.com/.default" type="text"/>
+<p class="field-hint">The local backend asks the token address for an access token, keeps it in memory until shortly before it expires, and sends it as a Bearer token. The secret is sent only to a verified HTTPS address and is stored for this connection only.</p></div>
+</div>
+<div id="conn-basic-auth-group">
+<div class="form-group"><label for="conn-basic-username">Username</label><input id="conn-basic-username" type="text"/></div>
+<div class="form-group"><label for="conn-basic-password">Password</label><input id="conn-basic-password" type="password"/></div>
+</div>
+<details class="model-details" id="conn-session-headers-group">
+<summary>Send login cookies as headers (only if your platform requires it)</summary>
+<div class="form-group">
+<label for="conn-headers-from-cookies">Cookie names to repeat as headers</label>
+<textarea id="conn-headers-from-cookies" placeholder="XSRF-TOKEN" rows="2"></textarea>
+<p class="field-hint">Cookie names, not values. Each is sent as a header with the same name. For a different header name, use {"Header":"cookieName"}.</p>
+</div>
+</details>
+</section>
+<details class="model-details" id="conn-more">
+<summary>More options</summary>
+<h4>Which pages</h4>
+<div class="form-group">
+<label for="conn-page-match">Only on addresses containing (optional)</label>
+<input id="conn-page-match" placeholder="/workspace/security" type="text"/>
+<p class="field-hint">Useful when several workspaces share one website.</p>
+</div>
+<div class="form-group">
+<label for="conn-discover-hint">Search page address contains (optional)</label>
+<input id="conn-discover-hint" placeholder="/events" type="text"/>
+<p class="field-hint">Helps pick the right table on consoles with several frames, and stops page-text values being read on the search page.</p>
+</div>
+<div class="form-group">
+<label for="conn-sso-hint">Sign-in page (optional)</label>
+<input id="conn-sso-hint" placeholder="https://login.example.com" type="text"/>
+</div>
+<h4>Records and statistics</h4>
+<div class="form-group">
+<label for="conn-max-records">Maximum records per extraction</label>
+<input id="conn-max-records" placeholder="5000" type="number"/>
+<p class="field-hint">Between 1 and 5,000. Page readers only see rows that are currently displayed.</p>
+</div>
+<div class="form-group">
+<label for="conn-statistics-mode">When I click Extract statistics</label>
+<select id="conn-statistics-mode">
+<option value="records">Summarize this connection's records</option>
+<option value="captured">Summarize the logs already captured in VEILUX</option>
+<option value="opensearch">Use the current search from the Inspector panel</option>
+<option value="disabled">Do not collect statistics</option>
+</select>
+</div>
+<div id="conn-more-api">
+<h4>API connection</h4>
+<div class="form-group">
+<label for="conn-test-path">Connection check path</label>
+<input id="conn-test-path" placeholder="/health" type="text"/>
+<p class="field-hint">A read-only path used by Test connection. A passing check does not prove extraction works; use Preview extraction too.</p>
+</div>
+<div class="form-group">
+<label for="conn-execute-via">Where API requests run</label>
+<select id="conn-execute-via"><option value="auto">In the signed-in browser tab when possible</option><option value="backend">Always through the local backend</option></select>
+<p class="field-hint">With browser login on the same website, simple record reads use the open tab. Other sign-in methods, separate API addresses and search jobs use the backend.</p>
+</div>
+<label class="toggle-label"><input checked="" id="conn-verify-ssl" type="checkbox"/> Verify the API certificate</label>
+<div class="form-group">
+<label for="conn-tls-trust">Trusted certificates</label>
+<select id="conn-tls-trust"><option value="system">Computer trust store and public authorities (recommended)</option><option value="bundled">Bundled public authorities only</option></select>
+</div>
+<details><summary>Organization CA certificate (optional)</summary>
+<p class="field-hint">For a private company CA, load its public PEM certificate or bundle from your IT team. It is trusted for this connection only.</p>
+<label for="conn-ca-pem">Public CA certificate or bundle (PEM)</label>
+<textarea id="conn-ca-pem" placeholder="-----BEGIN CERTIFICATE-----" rows="4"></textarea>
+<button class="btn btn-secondary" id="conn-load-ca" type="button">Load CA certificate</button>
+<input accept=".pem,.crt,.cer" aria-label="Organization CA certificate file" hidden="" id="conn-ca-file" type="file"/>
+<p id="conn-ca-status" role="status"></p>
+</details>
+</div>
+</details>
+<div class="connector-summary" id="conn-summary" role="status"></div>
+<div class="btn-group">
+<button class="btn btn-primary" id="test-connector" type="button">Test connection</button>
+<button class="btn btn-secondary" id="preview-connector" type="button">Preview extraction</button>
+<button class="btn btn-success" id="save-connector" type="button">Save connection</button>
+<button class="btn btn-secondary" id="cancel-connector" type="button">Cancel</button>
+</div>
+<p class="field-hint">Preview reads a matching open page with the settings above. It never calls an AI service and does not save.</p>
+<div id="connector-test-result" role="status"></div>
+<pre id="connector-preview-result" role="status"></pre>
+</div>
+</div></section>
+<section aria-label="Extraction output" class="settings-group" id="extraction"><div class="section">
+<h2>Extraction output</h2>
+<div class="info-box">
+        Choose how extracted data is shown in the popup. In both modes, sanitization and analysis continue to work normally.
+      </div>
+<div class="list-container">
+<label class="list-item" style="cursor:pointer;">
+<input checked="" id="extraction-mode-separate" name="extraction-output-mode" type="radio" value="separate_logs"/>
+<div class="list-item-content" style="display:block;">
+<div class="toggle-label">Separate logs</div>
+<div class="toggle-desc">Show each extracted hit as its own JSON block with the old ---LOG SEPARATOR--- divider.</div>
+</div>
+</label>
+<label class="list-item" style="cursor:pointer;">
+<input id="extraction-mode-raw" name="extraction-output-mode" type="radio" value="raw_request"/>
+<div class="list-item-content" style="display:block;">
+<div class="toggle-label">Extract raw request (without separators)</div>
+<div class="toggle-desc">Show the raw search response as one block whenever available, without log separators.</div>
+</div>
+</label>
+</div>
+</div></section>
+<p class="settings-group-label">AI</p>
+<section aria-label="Providers and keys" class="settings-group" id="ai"><div class="section">
+<h2>Providers and API keys</h2>
+<div class="form-group">
+<label for="groq-api-key">Groq API Key</label>
+<input id="groq-api-key" placeholder="gsk_..." type="password"/>
+</div>
+<div class="form-group">
+<label for="deepseek-api-key">DeepSeek API Key</label>
+<input id="deepseek-api-key" placeholder="sk-..." type="password"/>
+</div>
+<div class="form-group">
+<label for="together-api-key">Together AI API Key</label>
+<input id="together-api-key" placeholder="..." type="password"/>
+</div>
+<div class="form-group">
+<label for="openrouter-api-key">OpenRouter API Key</label>
+<input id="openrouter-api-key" placeholder="sk-or-..." type="password"/>
+</div>
+<fieldset class="or-picker-box">
+<legend>OpenRouter model</legend>
+<div class="or-picker" id="openrouter-model-picker"></div>
+</fieldset>
+<div class="form-group">
+<label for="gemini-api-key">Google Gemini API Key</label>
+<input id="gemini-api-key" placeholder="AIza..." type="password"/>
+</div>
+<div class="form-group">
+<label for="claude-api-key">Claude API Key</label>
+<input id="claude-api-key" placeholder="sk-ant-..." type="password"/>
+</div>
+<button class="btn btn-primary" id="test-apis-btn" type="button">🧪 Test All APIs</button>
+<div id="api-test-results"></div>
+</div></section>
+<section aria-label="Your models" class="settings-group" id="models"><div class="section">
+<h2>Your AI models</h2>
+<p class="field-hint">Connect a cloud or local model. Choose a service, enter its model ID and key, then test the connection. Saved models appear in the popup's AI provider list.</p>
+<div class="prompt-list" id="custom-model-list"></div>
+<button class="btn btn-success" id="add-custom-model-trigger" style="margin-top:12px;" type="button">Add a model</button>
+<div class="add-prompt-form" id="custom-model-form">
+<div class="form-group">
+<label for="cm-preset">Model service</label>
+<select id="cm-preset">
+<option value="">Other service / set up manually</option>
+<option value="anthropic">Claude by Anthropic</option>
+<option value="openai">OpenAI</option>
+<option value="gemini">Google Gemini</option>
+<option value="ollama">Ollama (on this computer)</option>
+<option value="lmstudio">LM Studio (on this computer)</option>
+<option value="mistral">Mistral AI</option>
+<option value="perplexity">Perplexity</option>
+<option value="azure">Azure OpenAI</option>
+</select>
+<p class="field-hint">Choosing a service fills in its connection details. You can edit them below.</p>
+</div>
+<div class="form-group"><label for="cm-name">Name in VEILUX</label>
+<input id="cm-name" placeholder="For example, My Claude" type="text"/></div>
+<div class="form-group"><label for="cm-model">Model ID</label>
+<input aria-describedby="cm-model-help" id="cm-model" placeholder="Copy the model ID from your service" type="text"/>
+<p class="field-hint" id="cm-model-help">Use the exact ID from your service, not its display name. Availability depends on your account.</p></div>
+<div class="form-group"><label for="cm-key">API key</label>
+<input aria-describedby="cm-key-help" autocomplete="off" id="cm-key" type="password"/>
+<p class="field-hint" id="cm-key-help">Leave blank if your local service does not need a key. Keys stay in this browser and go through your local backend to the chosen service. Exports leave them out by default.</p></div>
+<details class="model-details" id="cm-connection-details" open="">
+<summary>Connection details</summary>
+<div class="form-group"><label for="cm-endpoint">Service URL</label>
+<input aria-describedby="cm-endpoint-help" id="cm-endpoint" placeholder="https://your-service.example/v1/chat/completions" type="text"/>
+<p class="field-hint" id="cm-endpoint-help">Use the full API address supplied by the service. For Gemini, {model} is filled with your Model ID.</p></div>
+<div class="form-group"><label for="cm-format">Connection type</label>
+<select id="cm-format"><option value="openai">OpenAI compatible (including many local services)</option>
+<option value="anthropic">Claude / Anthropic Messages</option><option value="gemini">Google Gemini</option></select>
+<p class="field-hint">Use the type required by this service URL. A company gateway may use a different type than the model's original provider.</p></div>
+</details>
+<details class="model-details" id="cm-advanced"><summary>Advanced settings (optional)</summary>
+<div class="form-group"><label for="cm-temperature">Response style</label>
+<input aria-describedby="cm-temperature-help" id="cm-temperature" max="2" min="0" placeholder="Use model default" step="any" type="number"/>
+<p class="field-hint" id="cm-temperature-help">Leave blank to use the model's default. Lower values reduce variation. If the service says this setting is unsupported, VEILUX retries without it.</p></div>
+<div class="form-group"><label for="cm-max-tokens">Response length limit</label>
+<input aria-describedby="cm-max-tokens-help" id="cm-max-tokens" min="1" placeholder="4000" step="1" type="number"/>
+<p class="field-hint" id="cm-max-tokens-help">Maximum output tokens (pieces of text). Leave blank for 4,000. Reasoning models may need a larger limit. The connection test uses this limit too.</p></div>
+<div class="form-group"><label for="cm-extra-headers">Extra request headers</label>
+<textarea aria-describedby="cm-headers-help" id="cm-extra-headers" placeholder='{"X-Team": "SOC"}' rows="2"></textarea>
+<p class="field-hint" id="cm-headers-help">Usually empty. Only add these if your service asks for them, as a JSON object with text values.</p></div>
+</details>
+<div class="btn-group">
+<button class="btn btn-primary" id="test-custom-model" type="button">Test connection</button>
+<button class="btn btn-success" id="save-custom-model" type="button">Save model</button>
+<button class="btn btn-secondary" id="cancel-custom-model" type="button">Cancel</button>
+</div>
+<div id="custom-model-test-result" style="margin-top:8px;"></div>
+</div>
+</div></section>
+<section aria-label="Prompts" class="settings-group" id="prompts"><div class="section">
+<h2>Analysis prompts</h2>
+<div class="info-box">
+<strong>Default Prompt:</strong> A built-in security analysis prompt is always available. Add custom prompts below for different use cases.
+      </div>
+<div class="form-group">
+<label for="default-prompt-select">Default Prompt (used when the popup opens)</label>
+<select id="default-prompt-select"></select>
+</div>
+<div class="prompt-list" id="prompt-list"></div>
+<button class="btn btn-success" id="add-prompt-trigger" style="margin-top: 12px;" type="button">➕ Add New Custom Prompt</button>
+<div class="add-prompt-form" id="add-prompt-form">
+<div class="form-group">
+<label for="new-prompt-title">Prompt Title</label>
+<input id="new-prompt-title" placeholder="e.g., Malware Analysis, Firewall Logs" type="text"/>
+</div>
+<div class="form-group">
+<label for="new-prompt-content">Prompt Content</label>
+<textarea id="new-prompt-content" placeholder="Enter your custom prompt instructions..." rows="6"></textarea>
+</div>
+<div class="btn-group">
+<button class="btn btn-success" id="save-new-prompt" type="button">💾 Save Prompt</button>
+<button class="btn btn-secondary" id="cancel-new-prompt" type="button">Cancel</button>
+</div>
+</div>
+</div><div class="section">
+<h2>Quick questions for Ask</h2>
+<p class="field-hint">Shown above the Ask box in the popup. Clicking one puts it in the box, ready to edit or send. One question per line, up to 12.</p>
+<div class="form-group"><label for="quick-questions">Questions</label><textarea id="quick-questions" rows="6"></textarea></div>
+<div class="btn-group"><button class="btn btn-primary btn-small" id="quick-questions-save" type="button">Save questions</button>
+<button class="btn btn-secondary btn-small" id="quick-questions-reset" type="button">Restore defaults</button></div>
+<p aria-live="polite" class="field-hint" id="quick-questions-status" role="status"></p>
+</div></section>
+<section aria-label="Lessons" class="settings-group" id="lessons"><div class="section">
+<h2>Lessons</h2>
+<p class="field-hint">Corrections you send from the popup's Correction box are saved here as pending lessons. Only approved lessons are added to AI prompts, for every case: the 10 most recent approved ones. Edit a lesson to make it general, or delete it. Lessons are stored by the local backend, with private values already hidden.</p>
+<div class="lessons-toolbar"><button class="btn btn-secondary btn-small" id="lessons-reload" type="button">Reload lessons</button><p class="field-hint" id="lessons-status" role="status"></p></div>
+<h3 class="lessons-heading">Waiting for approval</h3>
+<div class="lessons-list" id="lessons-pending"></div>
+<h3 class="lessons-heading">Approved</h3>
+<div class="lessons-list" id="lessons-approved"></div>
+</div></section>
+<p class="settings-group-label">Protection</p>
+<section aria-label="Privacy masking" class="settings-group" id="protection"><div class="section">
+<h2>Privacy masking</h2>
+<div class="info-box">
+Masking replaces users, hosts, addresses and other identifying values with markers such as <code>⟦USER#1⟧</code> before the AI sees them; the real values are restored in the answer on this computer. The popup's privacy switches turn these methods on or off for each case. Your own Hide and Review rules (<a href="#rules">Custom rules</a>) and <a href="#detection">credential detection</a> apply even when masking is off.
+      </div>
+<!-- Pattern-Based Sanitization -->
+<div class="toggle-container">
+<label class="toggle-switch">
+<input id="enable-pattern-sanitization" type="checkbox"/>
+<span class="toggle-slider"></span>
+</label>
+<div>
+<label class="toggle-label" for="enable-pattern-sanitization">Pattern-Based Sanitization</label>
+<div class="toggle-desc">Auto-detect and replace IPs (IPv4 + IPv6), usernames, hostnames, emails, domains, and Windows domain SIDs</div>
+</div>
+</div>
+<div class="subsection">
+<h3>Internal IP Ranges</h3>
+<div class="info-box">
+          Private ranges (RFC1918, CGNAT, IPv6 ULA/link-local) are always treated as internal. Add your own CIDR ranges here if your network uses different addressing that should also count as internal.
+        </div>
+<div class="list-container">
+<div id="custom-cidrs-list"></div>
+<div class="add-form">
+<div class="labelled-control"><label class="compact-label" for="new-cidr">IP range (CIDR)</label><input id="new-cidr" placeholder="e.g., 172.20.0.0/16 or 2001:db8::/32" type="text"/></div>
+<button class="btn btn-success btn-small" id="add-cidr-btn" type="button">➕ Add</button>
+</div>
+</div>
+</div>
+<div class="subsection">
+<h3>Internal Domains</h3>
+<div class="info-box">
+          Reserved suffixes (.local, .internal, .corp, .lan, etc.) are always treated as internal. Add your own org-specific domain suffixes here — e.g. an internal AD domain like <code>corp.example.org</code> — so hostnames under it (like <code>lb01.corp.example.org</code>) are skipped instead of sent to threat-intel lookups.
+        </div>
+<div class="list-container">
+<div id="custom-domains-list"></div>
+<div class="add-form">
+<div class="labelled-control"><label class="compact-label" for="new-domain">Internal domain</label><input id="new-domain" placeholder="e.g., corp.example.org" type="text"/></div>
+<button class="btn btn-success btn-small" id="add-domain-btn" type="button">➕ Add</button>
+</div>
+</div>
+</div>
+<!-- JSON Key Filtering -->
+<div class="toggle-container">
+<label class="toggle-switch">
+<input checked="" id="enable-json-key-sanitization" type="checkbox"/>
+<span class="toggle-slider"></span>
+</label>
+<div>
+<label class="toggle-label" for="enable-json-key-sanitization">JSON Key Filtering</label>
+<div class="toggle-desc">Hide values of specific JSON keys (e.g., event_src, Hostname)</div>
+</div>
+</div>
+<div class="subsection" id="json-keys-subsection">
+<h3>JSON Keys to Hide</h3>
+<div class="list-container">
+<div id="json-keys-list"></div>
+<div class="add-form">
+<div class="labelled-control"><label class="compact-label" for="new-json-key">JSON key to hide</label><input id="new-json-key" placeholder="Enter key name (e.g., event_src)" type="text"/></div>
+<button class="btn btn-success btn-small" id="add-json-key-btn" type="button">➕ Add</button>
+</div>
+</div>
+</div>
+<!-- Statistics field filtering -->
+<div class="toggle-container">
+<label class="toggle-switch">
+<input checked="" id="enable-statistics-field-sanitization" type="checkbox"/>
+<span class="toggle-slider"></span>
+</label>
+<div>
+<label class="toggle-label" for="enable-statistics-field-sanitization">Statistics Field Value Filtering</label>
+<div class="toggle-desc">Hide top values for selected statistics fields before AI analysis. Names ignore case and punctuation: Event_Ip matches event_ip.</div>
+</div>
+</div>
+<div class="subsection" id="statistics-fields-subsection">
+<h3>Statistics Fields Whose Values Must Be Hidden</h3>
+<div class="list-container">
+<div id="statistics-fields-list"></div>
+<div class="add-form">
+<div class="labelled-control"><label class="compact-label" for="new-statistics-field">Statistics field to hide</label><input id="new-statistics-field" placeholder="Enter field name (e.g., Event_Ip)" type="text"/></div>
+<button class="btn btn-success btn-small" id="add-statistics-field-btn" type="button">➕ Add</button>
+</div>
+</div>
+</div>
+<!-- Custom Keywords -->
+<div class="toggle-container">
+<label class="toggle-switch">
+<input checked="" id="enable-custom-keywords" type="checkbox"/>
+<span class="toggle-slider"></span>
+</label>
+<div>
+<label class="toggle-label" for="enable-custom-keywords">Custom Keyword Replacement</label>
+<div class="toggle-desc">Replace specific strings with custom placeholders</div>
+</div>
+</div>
+<div class="subsection" id="custom-keywords-subsection">
+<h3>Keyword Replacements</h3>
+<div class="list-container">
+<div id="custom-keywords-list"></div>
+<div class="add-form">
+<div class="add-form-row">
+<div class="labelled-control"><label class="compact-label" for="new-keyword">Keyword</label><input id="new-keyword" placeholder="Keyword to find" type="text"/></div>
+<div class="labelled-control"><label class="compact-label" for="new-replacement">Replacement</label><input id="new-replacement" placeholder="Replacement" type="text"/></div>
+<button class="btn btn-success btn-small" id="add-keyword-btn" type="button">➕ Add</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Custom regex policy. Production and test both use the backend's
+           bounded Python regex engine; the browser never guesses compatibility. -->
+
+
+<button class="btn btn-primary" id="test-sanitization" style="margin-top: 16px;" type="button">🧪 Test Sanitization</button>
+<div id="sanitization-test-result"></div>
+</div></section>
+<section aria-label="Custom rules" class="settings-group" id="rules"><div class="section">
+<h2>Custom rules</h2>
+<p class="field-hint">Your own hide, review and keep rules, in one place. A <strong>regex</strong> rule matches text anywhere in the logs, context and statistics; a <strong>field</strong> rule matches a JSON field or path. <strong>Hide</strong> and <strong>Review</strong> add protection and still apply when the popup's automatic masking is off. <strong>Keep</strong> stops uncertain values from being flagged, and never overrides a Hide rule, a manual hide or a strong credential.</p>
+<div class="list-container rules-list" id="custom-rules-list"></div>
+<div class="rule-form">
+<div class="add-form">
+<div class="labelled-control"><label class="compact-label" for="rule-kind">Match by</label><select id="rule-kind"><option value="regex">Regex</option><option value="field">JSON field</option></select></div>
+<div class="labelled-control" id="rule-name-control"><label class="compact-label" for="regex-name">Rule name</label><input id="regex-name" placeholder="e.g. Ticket numbers" type="text"/></div>
+<div class="labelled-control"><label class="compact-label" for="rule-target" id="rule-target-label">Regex pattern</label><input id="rule-target" placeholder="e.g. TCK-\d{6}" spellcheck="false" type="text"/></div>
+<div class="labelled-control"><label class="compact-label" for="regex-action">Action</label><select id="regex-action"><option value="hide_secret">Hide as a credential (never restored)</option><option value="hide_privacy">Hide as a privacy value (restored locally)</option><option value="review">Review before sending</option><option value="exclude">Keep (never flag)</option></select></div>
+<button class="btn btn-success btn-small" id="add-rule" type="button">Add rule</button>
+<button class="btn btn-secondary btn-small" hidden="" id="cancel-rule-edit" type="button">Cancel edit</button>
+</div>
+<details class="rule-advanced"><summary>Advanced options</summary>
+<div class="add-form" id="rule-regex-options">
+<div class="labelled-control"><label class="compact-label" for="regex-flags">Regex flags</label><input id="regex-flags" maxlength="4" placeholder="Flags: i m s x" type="text"/></div>
+<div class="labelled-control"><label class="compact-label" for="regex-mode">Match mode</label><select id="regex-mode"><option value="full_value">Full value</option><option value="token">Whole token</option><option value="substring">Substring</option></select></div>
+<div class="labelled-control"><label class="compact-label" for="regex-scope">Applies to</label><select id="regex-scope"><option value="heuristics">Uncertain heuristics</option><option value="privacy">Automatic privacy findings</option><option value="all">All eligible uncertain findings</option></select></div>
+<div class="labelled-control"><label class="compact-label" for="regex-capture">Capture group</label><input id="regex-capture" min="0" title="Capture group to hide" type="number" value="0"/></div>
+</div>
+<div class="add-form" hidden="" id="rule-field-options">
+<div class="labelled-control"><label class="compact-label" for="heuristic-field-mode">Field matching</label><select id="heuristic-field-mode"><option value="key_anywhere">Literal key at any depth</option><option value="exact_path">Exact nested path</option></select></div>
+</div>
+<p class="field-hint">Match mode and Applies to matter for Keep rules: by default a Keep rule must match the whole value, and only uncertain heuristic findings are kept. A field written with dots (<code>_source.tags</code>) is an exact path; a plain name matches that key at any depth.</p>
+</details>
+</div>
+<details class="rule-test"><summary>Test rules on sample text</summary>
+<div class="form-group"><label for="regex-test-text">Sample text</label><textarea id="regex-test-text" placeholder="Paste synthetic sample text" rows="3"></textarea>
+<button class="btn btn-primary btn-small" id="test-regex-rule" type="button">Test with backend</button><div id="regex-test-result"></div></div>
+<p class="field-hint">Uses the rules above before they are saved. Nothing is sent outside this computer.</p>
+</details>
+</div></section>
+<section aria-label="Credential detection" class="settings-group" id="detection"><div class="section">
+<h2>Credential detection</h2>
+<p class="field-hint">Recognisable credentials (provider tokens, private keys, authorization headers, passwords in URLs and assignments) are always hidden before anything is sent. Values that only <em>look</em> random, such as long tokens and hashes, are flagged by entropy heuristics and shown for review. The popup's <strong>Secret protection</strong> switches turn each method on or off.</p>
+<h3>Entropy thresholds</h3>
+<p class="field-hint">How random a value must look to be flagged. Raise them to see fewer reviews; lower them to catch more. To stop flagging one field, add a Keep rule in <a href="#rules">Custom rules</a>.</p>
+<div class="add-form"><div class="labelled-control"><label class="compact-label" for="heuristic-min-length">Minimum token length</label><input id="heuristic-min-length" max="128" min="8" title="Minimum token length" type="number" value="10"/></div><div class="labelled-control"><label class="compact-label" for="heuristic-lowercase-min-length">Minimum lowercase length</label><input id="heuristic-lowercase-min-length" max="128" min="8" title="Minimum lowercase-only length" type="number" value="14"/></div><div class="labelled-control"><label class="compact-label" for="heuristic-entropy">General entropy threshold</label><input id="heuristic-entropy" max="6" min="2" step="0.1" title="General entropy threshold" type="number" value="3.5"/></div><div class="labelled-control"><label class="compact-label" for="heuristic-lowercase-entropy">Lowercase entropy threshold</label><input id="heuristic-lowercase-entropy" max="6" min="2" step="0.05" title="Lowercase entropy threshold" type="number" value="3.15"/></div></div>
+</div></section>
+<section aria-label="Threat intelligence" class="settings-group" id="threat-intel"><div class="section">
+<h2>Threat intelligence</h2>
+<div class="info-box">
+        Reputation and ownership checks for IPs, domains, URLs and file hashes. Secret protection runs before anything is sent to these services. <strong>WHOIS / RDAP is free and needs no API key</strong>; it supplies registration dates and network ownership where the registry provides them. VirusTotal checks reputation and may supply ASN information. AbuseIPDB checks IP addresses and supplies report counts, ISP, usage type, domain and country. Its documented API does not provide city or WHOIS data.
+        <p>Choose sources in the popup. Automatic enrichment checks up to 50 indicators (25 per type), within a 45-second budget, and caches successful source results for 24 hours. Provider limits can leave partial results; unavailable sources are labelled. Manual Check and Test Keys always request fresh results.</p>
+</div>
+<div class="form-group">
+<label for="virustotal-api-key">VirusTotal API Key</label>
+<input id="virustotal-api-key" placeholder="..." type="password"/>
+</div>
+<div class="form-group">
+<label for="abuseipdb-api-key">AbuseIPDB API Key (IP reputation only)</label>
+<input id="abuseipdb-api-key" placeholder="..." type="password"/>
+</div>
+<div class="toggle-container">
+<label class="toggle-switch">
+<input id="enable-threat-intel" type="checkbox"/>
+<span class="toggle-slider"></span>
+</label>
+<div>
+<label class="toggle-label" for="enable-threat-intel">Auto-enrich analyses with threat intel</label>
+<div class="toggle-desc">Off by default. When on, IOCs found during Analyze are checked automatically and flagged findings are added to the AI's context.</div>
+</div>
+</div>
+<button class="btn btn-primary" id="test-threat-intel-btn" style="margin-top: 12px;" type="button">🧪 Test Threat Intel Keys</button>
+<div id="threat-intel-test-result"></div>
+</div></section>
+<p class="settings-group-label">Reports</p>
+<section aria-label="Email templates" class="settings-group" id="reports"><div class="section">
+<h2>Email reports</h2>
+<p class="field-hint">A report template turns a case into an escalation email: the AI writes the content, VEILUX fills your template, and you copy the result into your mail client. Templates stay in this browser. Create your own from the built-in one, or import a template file shared by your team.</p>
+<div class="form-group"><label for="report-default">Default template</label><select id="report-default"></select>
+<p class="field-hint">Used for new reports. The popup can switch template for each report.</p></div>
+<div class="report-template-list" id="report-template-list"></div>
+<div class="report-toolbar"><button class="btn btn-primary btn-small" id="report-new" type="button">New template</button>
+<button class="btn btn-secondary btn-small" id="report-import" type="button">Import template file</button>
+<input accept=".json,application/json" aria-label="Import report template file" hidden="" id="report-import-file" type="file"/></div>
+<p aria-live="polite" class="field-hint" id="report-status" role="status"></p>
+<form class="report-editor" hidden="" id="report-editor" novalidate="">
+<h3 id="report-editor-title">New template</h3>
+<div class="form-row"><div class="form-group grow"><label for="report-name">Template name</label><input id="report-name" placeholder="For example, Client escalation" type="text"/></div>
+<div class="form-group"><label for="report-language">Language of the report</label><input id="report-language" list="report-languages" placeholder="English" type="text"/>
+<datalist id="report-languages"><option value="English"></option><option value="French"></option><option value="Spanish"></option><option value="German"></option><option value="Portuguese"></option><option value="Italian"></option><option value="Dutch"></option><option value="Arabic"></option></datalist></div></div>
+<fieldset class="sub-group"><legend>Severity scale</legend>
+<p class="field-hint">The levels your company or security tools use, from lowest to highest, with the colour shown in the report. The AI picks one when the analyst leaves severity on Auto.</p>
+<div class="severity-rows" id="report-severities"></div>
+<button class="btn btn-secondary btn-small" id="report-add-severity" type="button">Add a level</button></fieldset>
+<div class="form-group"><label for="report-subject">Subject pattern</label><input id="report-subject" placeholder="Case #{{case_id}} - {{title}}" spellcheck="false" type="text"/>
+<p class="field-hint">Write <code>{{name}}</code> for each value. Filled by VEILUX: <code>{{title}}</code>, <code>{{case_id}}</code>, <code>{{severity}}</code>, <code>{{date}}</code>. Any other name, such as <code>{{client}}</code>, becomes a field on the report page; a name starting with <code>ai_</code>, such as <code>{{ai_affected_asset}}</code>, is written by the AI instead. Add <code>|upper</code> or <code>|lower</code> to change the case: <code>{{client|upper}}</code>.</p>
+<p class="field-hint" id="report-fields-preview"></p></div>
+<div class="form-group"><label for="report-case-placeholder">Text when no case ID is entered</label><input id="report-case-placeholder" placeholder="[Case ID]" type="text"/></div>
+<div class="form-group"><label for="report-instructions">Instructions for the AI</label><textarea id="report-instructions" rows="7"></textarea>
+<p class="field-hint">How the AI should write: tone, focus, what to include. VEILUX adds the answer format, the language and the severity scale itself. <button class="text-button" id="report-reset-instructions" type="button">Use the built-in instructions</button></p></div>
+<div class="form-group"><label for="report-html">Email HTML</label><textarea class="report-html" id="report-html" rows="12" spellcheck="false"></textarea>
+<p class="field-hint">Use inline styles: many mail clients ignore <code>&lt;style&gt;</code> blocks. Values: <code>{{title}}</code>, <code>{{case_id}}</code>, <code>{{severity}}</code>, <code>{{severity_color}}</code>, <code>{{detection_time}}</code>, <code>{{date}}</code>, <code>{{summary}}</code>, <code>{{context}}</code>. Lists repeat their block: <code>{{#details}}{{label}} {{value}}{{#highlight}}…{{/highlight}}{{/details}}</code>, <code>{{#risks}}{{.}}{{/risks}}</code>, <code>{{#recommendations}}{{.}}{{/recommendations}}</code>, <code>{{#annexes}}{{label}}{{/annexes}}</code>. Show a section once with <code>{{#has_risks}}…{{/has_risks}}</code>; <code>{{^name}}…{{/name}}</code> shows text when a value is empty. Every value is escaped, so log content cannot add HTML. <button class="text-button" id="report-import-html" type="button">Import an HTML file</button></p>
+<input accept=".html,.htm,text/html" aria-label="Import email HTML file" hidden="" id="report-import-html-file" type="file"/></div>
+<label class="checkbox-option-small"><input id="report-keep-masked" type="checkbox"/><span>Keep protected values masked in the report (for example ⟦USER#1⟧) instead of restoring the real values on this computer</span></label>
+<div class="btn-group report-editor-actions"><button class="btn btn-secondary" id="report-preview" type="button">Preview with sample data</button>
+<button class="btn btn-primary" id="report-save" type="button">Save template</button><button class="btn btn-secondary" id="report-cancel" type="button">Cancel</button></div>
+<iframe class="report-preview-frame" hidden="" id="report-preview-frame" sandbox="" title="Template preview"></iframe>
+</form>
+</div></section>
+<p class="settings-group-label">General</p>
+<section aria-label="Cases" class="settings-group" id="cases"><div class="section">
+<h2>Cases</h2>
+<p class="field-hint">Work on several investigations at once. Each case in the popup keeps its own logs, statistics, context, choices and results. Switch between cases with ‹ › in the popup header; archived cases stay available, read-only, from its ⋯ menu.</p>
+<div class="form-group">
+<label for="case-slots">Case slots in the popup</label>
+<input id="case-slots" max="5" min="2" step="1" type="number" value="2"/>
+<p class="field-hint">2 to 5. If you lower this, cases in the removed slots are archived the next time the popup opens; empty ones are discarded.</p>
+</div>
+<div class="form-group">
+<label for="max-running-analyses">Analyses running at once</label>
+<input id="max-running-analyses" max="5" min="1" step="1" type="number" value="3"/>
+<p class="field-hint">1 to 5. Further analyses wait in a queue and start when one finishes. Local protection uses your computer's processor, and free AI models have low rate limits, so a small number keeps every case fast.</p>
+</div>
+</div></section>
+<section aria-label="Backend" class="settings-group" id="backend"><div class="section">
+<h2>Backend</h2>
+<p class="field-hint">The backend (server.py) protects logs before they reach an AI service, and runs API and threat-intel requests. Enter where it runs.</p>
+<div class="form-group">
+<label for="backend-url">Backend address</label>
+<input id="backend-url" placeholder="http://localhost:8000" type="text"/>
+<p class="field-hint">Leave blank for http://localhost:8000. For another port, start the backend with <code>python server.py --port 8100</code> and enter http://localhost:8100.</p>
+</div>
+<div class="form-group">
+<label for="backend-pairing-code">Pairing code</label>
+<div class="pair-row"><input autocomplete="off" id="backend-pairing-code" placeholder="ABCD-2345" spellcheck="false" type="text"/>
+<button class="btn btn-primary" id="pair-backend" type="button">Pair</button></div>
+<p class="field-hint">The backend shows a pairing code when it starts. Enter it once per browser: VEILUX then holds the backend key and signs every request with it, so other extensions cannot use your backend.</p>
+</div>
+<div class="form-group">
+<label for="backend-token">Backend key</label>
+<input autocomplete="off" id="backend-token" spellcheck="false" type="password"/>
+<p class="field-hint">Filled in by pairing. For a backend on another computer, paste the <code>VEILUX_TOKEN</code> value it was started with.</p>
+</div>
+<button class="btn btn-secondary" id="check-backend" type="button">Check backend</button>
+<p id="backend-status" role="status"></p>
+</div></section>
+<section aria-label="Appearance" class="settings-group" id="appearance"><div class="section">
+<h2>Appearance</h2>
+<div class="toggle-container">
+<label class="toggle-switch">
+<input id="dark-mode" type="checkbox"/>
+<span class="toggle-slider"></span>
+</label>
+<div>
+<label class="toggle-label" for="dark-mode">Dark mode</label>
+<div class="toggle-desc">Use the dark theme in the popup and Settings. Applies straight away; the light theme is the default.</div>
+</div>
+</div>
+</div></section>
+<section aria-label="Backup and reset" class="settings-group" id="backup"><div class="section">
+<h2>Backup</h2>
+<div class="info-box">
+        Export your configuration to a JSON file to back it up, move it to another machine, or share your sanitization rules with a teammate. Importing a file replaces your current settings with what's in it.
+      </div>
+<div class="toggle-container">
+<label class="toggle-switch">
+<input id="export-include-keys" type="checkbox"/>
+<span class="toggle-slider"></span>
+</label>
+<div>
+<label class="toggle-label" for="export-include-keys">Include API keys in export</label>
+<div class="toggle-desc">Off by default — API keys are secrets. Only enable this for a personal backup you'll keep private.</div>
+</div>
+</div>
+<div class="btn-group" style="margin-top: 12px;">
+<button class="btn btn-primary" id="export-settings-btn" type="button">📤 Export Settings</button>
+<button class="btn btn-secondary" id="import-settings-btn" type="button">📥 Import Settings</button>
+<input accept=".json,application/json" aria-label="Import settings file" id="import-settings-file" style="display:none;" type="file"/>
+</div>
+</div><div class="section reset-section"><h2>Reset settings</h2><p class="field-hint">Remove all saved configuration. This action requires confirmation.</p><button class="btn btn-danger" id="reset-all" type="button">Reset all settings</button></div></section>
+</main></div><footer class="settings-dock"><div><p id="settings-save-state" role="status">Loading settings…</p><p class="field-hint">Save settings applies keys and protection. Connectors, models and prompts have their own Save buttons.</p></div><button class="btn btn-success" id="save-settings" type="button">Save settings</button><div id="success-msg" role="status"></div></footer></div>
+<script src="browser-polyfill.js"></script>
+<script src="backend_address.js"></script>
+<script src="site_access.js"></script>
+<script src="openrouter_models.js"></script>
+<script src="connector_config.js"></script>
+<script src="connector_parameters.js"></script>
+<script src="connector_sources.js"></script>
+<script src="connector_client.js"></script>
+<script src="connector_browser.js"></script>
+<script src="custom_models.js"></script>
+<script src="connector_presets.js"></script>
+<script src="html.js"></script>
+<script src="settings.js"></script>
+<script src="connector_editor.js"></script>
+<script src="settings_ui.js"></script>
+<script src="report_templates.js"></script>
+<script src="report_settings.js"></script>
+<script src="lessons.js"></script>
+<script src="chat_questions.js"></script>
+<script src="quick_questions_settings.js"></script></body>
+</html>

@@ -1,0 +1,15 @@
+# Weekly pull requests for dependency updates, so security fixes are not missed.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /tools/browser-check
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
