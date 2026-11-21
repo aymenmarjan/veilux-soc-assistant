@@ -786,14 +786,17 @@
 <div class="form-group">
 <label for="groq-api-key">Groq API Key</label>
 <input id="groq-api-key" placeholder="gsk_..." type="password"/>
+<div class="or-picker provider-model" data-provider="groq" id="groq-model-picker"></div>
 </div>
 <div class="form-group">
 <label for="deepseek-api-key">DeepSeek API Key</label>
 <input id="deepseek-api-key" placeholder="sk-..." type="password"/>
+<div class="or-picker provider-model" data-provider="deepseek" id="deepseek-model-picker"></div>
 </div>
 <div class="form-group">
 <label for="together-api-key">Together AI API Key</label>
 <input id="together-api-key" placeholder="..." type="password"/>
+<div class="or-picker provider-model" data-provider="together" id="together-model-picker"></div>
 </div>
 <div class="form-group">
 <label for="openrouter-api-key">OpenRouter API Key</label>
@@ -806,12 +809,15 @@
 <div class="form-group">
 <label for="gemini-api-key">Google Gemini API Key</label>
 <input id="gemini-api-key" placeholder="AIza..." type="password"/>
+<div class="or-picker provider-model" data-provider="gemini" id="gemini-model-picker"></div>
 </div>
 <div class="form-group">
 <label for="claude-api-key">Claude API Key</label>
 <input id="claude-api-key" placeholder="sk-ant-..." type="password"/>
+<div class="or-picker provider-model" data-provider="claude" id="claude-model-picker"></div>
 </div>
 <button class="btn btn-primary" id="test-apis-btn" type="button">🧪 Test All APIs</button>
+<p class="field-hint">The test reads each provider's model list with its key and checks that the chosen model is available. No prompt or log is sent.</p>
 <div id="api-test-results"></div>
 </div></section>
 <section aria-label="Your models" class="settings-group" id="models"><div class="section">
@@ -838,8 +844,11 @@
 <div class="form-group"><label for="cm-name">Name in VEILUX</label>
 <input id="cm-name" placeholder="For example, My Claude" type="text"/></div>
 <div class="form-group"><label for="cm-model">Model ID</label>
-<input aria-describedby="cm-model-help" id="cm-model" placeholder="Copy the model ID from your service" type="text"/>
-<p class="field-hint" id="cm-model-help">Use the exact ID from your service, not its display name. Availability depends on your account.</p></div>
+<input aria-describedby="cm-model-help" id="cm-model" list="cm-model-options" placeholder="Copy the model ID from your service" type="text"/>
+<datalist id="cm-model-options"></datalist>
+<button class="btn btn-secondary btn-small" id="cm-load-models" style="margin-top:6px;" type="button">Load models</button>
+<p class="field-hint" id="cm-model-help">Use the exact ID from your service, not its display name. Availability depends on your account. Load models asks the service for its model list (only the key is sent) when its URL ends in /chat/completions, /messages or a Gemini /models/ address.</p>
+<p class="field-hint" id="cm-load-models-status" role="status"></p></div>
 <div class="form-group"><label for="cm-key">API key</label>
 <input aria-describedby="cm-key-help" autocomplete="off" id="cm-key" type="password"/>
 <p class="field-hint" id="cm-key-help">Leave blank if your local service does not need a key. Keys stay in this browser and go through your local backend to the chosen service. Exports leave them out by default.</p></div>
@@ -1207,6 +1216,7 @@ Masking replaces users, hosts, addresses and other identifying values with marke
 <script src="backend_address.js"></script>
 <script src="site_access.js"></script>
 <script src="openrouter_models.js"></script>
+<script src="provider_models.js"></script>
 <script src="connector_config.js"></script>
 <script src="connector_parameters.js"></script>
 <script src="connector_sources.js"></script>

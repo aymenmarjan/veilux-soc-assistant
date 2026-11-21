@@ -139,8 +139,37 @@ async def pairing_code():
     return {"code": server.PAIRING["code"]}
 
 
+# Backend requests still running. A test can end while one is in progress (for
+# example an extraction it cancelled, whose mocked API call takes seconds); the
+# next test's reset waits for it, so its outbound calls are not recorded there.
+in_progress = 0
+
+
+class TrackRequests:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "")
+        if scope["type"] != "http" or path.startswith(("/test/", "/extension/")):
+            return await self.app(scope, receive, send)
+        global in_progress
+        in_progress += 1
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            in_progress -= 1
+
+
+server.app.add_middleware(TrackRequests)
+
+
 @server.app.post("/test/reset")
 async def reset():
+    for _ in range(300):  # at most 15 s
+        if not in_progress:
+            break
+        await asyncio.sleep(0.05)
     sent.clear()
     server.threat_intel_cache.clear()
     server.training_data["feedback_entries"].clear()

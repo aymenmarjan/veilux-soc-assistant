@@ -1,7 +1,7 @@
 """Checks that a release package holds what it should, and nothing private.
 
-    python packaging/check_package.py dist/veilux-backend-1.0.0-linux-x64.tar.gz
-    python packaging/check_package.py dist/veilux-1.0.0-chromium.zip
+    python packaging/check_package.py dist/veilux-backend-1.0.1-linux-x64.tar.gz
+    python packaging/check_package.py dist/veilux-1.0.1-chromium.zip
 
 Backend packages: the program, its libraries, start instructions, licences
 and build record; the platform's icon assets (Windows: the icon and version
@@ -24,6 +24,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PRIVATE = {"veilux_backend.key", "training_feedback.json", "threat_intel_cache.json", "config.json", ".env"}
 LINUX_SIZES = [16, 24, 32, 48, 64, 128, 256, 512]
+# The version being released, as the extension manifest states it.
+VERSION = json.loads((ROOT / "extension" / "manifest.json").read_text(encoding="utf-8"))["version"]
 
 
 def check(label, condition, detail=""):
@@ -47,7 +49,7 @@ def check_extension(folder):
     same = all((folder / f).read_bytes() == (ROOT / "extension" / f).read_bytes() for f in files)
     check("every file is byte-for-byte as committed", same)
     manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
-    check("manifest version 1.0.0 and its icons", manifest["version"] == "1.0.0"
+    check(f"manifest version {VERSION} and its icons", manifest["version"] == VERSION
           and all((folder / icon).is_file() for icon in manifest["icons"].values()))
 
 
@@ -72,7 +74,7 @@ def check_windows(top):
                 strings.update({k.decode(): v.decode() for k, v in table.entries.items()})
     pe.close()   # pefile keeps the file open; Windows cannot delete it otherwise
     check("the .exe carries its version details", strings.get("ProductName") == "VEILUX"
-          and strings.get("ProductVersion") == "1.0.0" and strings.get("FileDescription") == "VEILUX backend", str(strings))
+          and strings.get("ProductVersion") == VERSION and strings.get("FileDescription") == "VEILUX backend", str(strings))
 
 
 def check_macos(top):
@@ -81,7 +83,7 @@ def check_macos(top):
     app = top / "VEILUX Backend.app" / "Contents"
     info = plistlib.loads((app / "Info.plist").read_bytes())
     check("VEILUX Backend.app has a valid Info.plist", info["CFBundleExecutable"] == "veilux-launcher"
-          and info["CFBundleIconFile"] == "veilux" and info["CFBundleShortVersionString"] == "1.0.0")
+          and info["CFBundleIconFile"] == "veilux" and info["CFBundleShortVersionString"] == VERSION)
     icns = (app / "Resources" / "veilux.icns").read_bytes()
     check("the app carries the VEILUX icon", icns[:4] == b"icns" and b"ic10" in icns and b"icp4" in icns)
     launcher = app / "MacOS" / "veilux-launcher"

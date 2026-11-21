@@ -38,7 +38,7 @@
 <div id="secret-review-list"></div>
 <p class="decision-summary" id="secret-review-decisions" role="status"></p></div></section><section aria-labelledby="stage-tab-case" class="stage" data-stage="case" id="stage-case" role="tabpanel"><div class="case-toolbar"><button class="btn btn-primary btn-extract-smart" id="extract-btn">Extract logs</button><button class="btn btn-primary" id="extract-stats-btn">Extract statistics</button><button class="btn btn-secondary" id="clear-btn" title="Clears captured logs, extracted statistics, case notes and results. Saved settings are kept.">Clear all inputs &amp; results</button></div><div aria-live="polite" class="source-summary" id="source-summary">Paste logs or extract from a source page.</div><div aria-label="Case inputs" class="subtabs" id="case-tabs" role="tablist"><button aria-controls="logs-preview" aria-expanded="true" class="subtab" id="logs-toggle" role="tab" type="button"><span>Logs</span><span class="subtab-count" id="case-count-logs"></span></button><button aria-controls="statistics-preview" aria-expanded="true" class="subtab" id="statistics-toggle" role="tab" type="button"><span>Statistics</span><span class="subtab-count" id="case-count-statistics"></span></button><button aria-controls="analyst-data-preview" aria-expanded="false" class="subtab" id="analyst-data-toggle" role="tab" type="button"><span id="case-notes-title">Case notes · optional</span></button></div><div class="section sub-panel" id="case-panel-logs"><div class="logs-preview" id="logs-preview">
 <textarea aria-label="Captured logs" id="logs-textarea" placeholder="No logs captured yet."></textarea>
-<button class="btn-copy" id="copy-logs-btn">Copy original logs</button>
+<button class="btn-copy" id="copy-logs-btn">Copy original logs</button><button class="btn-copy" id="insert-separator-btn" title="Insert ---LOG SEPARATOR--- at the cursor, so the next pasted log counts as a separate log" type="button">Insert log separator</button>
 </div></div><div class="sub-panel" hidden="" id="case-panel-statistics"><div class="sample-size-row"><label for="statistics-sample-size">Statistics sample</label><input aria-describedby="statistics-sample-help" id="statistics-sample-size" max="100000" min="1" step="500" type="number" value="5000"/><span id="statistics-sample-help">records (1 to 100,000)</span><label for="statistics-top-values">Top values</label><input aria-describedby="statistics-top-help" id="statistics-top-values" max="10" min="1" step="1" type="number" value="5"/><span id="statistics-top-help">per field (1 to 10)</span></div><p class="empty-state" id="statistics-empty">No statistics yet. Open a search in your SIEM and choose <strong>Extract statistics</strong> to summarize its fields.</p><div class="section" id="statistics-section" style="display:none;">
 
 <div class="logs-preview" id="statistics-preview">
@@ -266,6 +266,7 @@
 <script src="cases.js"></script>
 <script src="site_access.js"></script>
 <script src="openrouter_models.js"></script>
+<script src="provider_models.js"></script>
 <script src="secret_review.js"></script>
 <script src="connector_config.js"></script>
 <script src="connector_parameters.js"></script>

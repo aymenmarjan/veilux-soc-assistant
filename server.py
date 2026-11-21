@@ -27,12 +27,15 @@ from functools import lru_cache
 import json
 import os
 import re
+import regex as bounded_regex
 import asyncio
 import threading
 import time
 import uuid
 from contextvars import ContextVar
 import ipaddress
+import ntpath
+import posixpath
 import sys
 import socket
 import stat
@@ -61,7 +64,7 @@ try:
 except AttributeError:
     pass
 
-VERSION = "1.0.0"  # keep in step with extension/manifest.json
+VERSION = "1.0.1"  # keep in step with extension/manifest.json
 @asynccontextmanager
 async def lifespan(_app):
     _open_pairing_window()  # defined with the pairing endpoints below
@@ -129,12 +132,27 @@ def default_data_dir() -> str:
         return os.path.abspath(os.path.expanduser(explicit))
     if not getattr(sys, "frozen", False):
         return ""
-    home = os.path.expanduser("~")
-    if os.name == "nt":
-        return os.path.join(os.environ.get("LOCALAPPDATA") or os.path.join(home, "AppData", "Local"), "VEILUX")
-    if sys.platform == "darwin":
-        return os.path.join(home, "Library", "Application Support", "VEILUX")
-    return os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share"), "veilux")
+    return data_dir_for(system_name(), os.environ, os.path.expanduser("~"))
+
+
+def system_name(os_name: Optional[str] = None, platform: Optional[str] = None) -> str:
+    """"windows", "macos" or "linux" (any other POSIX system is treated as Linux)."""
+    os_name = os.name if os_name is None else os_name
+    platform = sys.platform if platform is None else platform
+    if os_name == "nt":
+        return "windows"
+    return "macos" if platform == "darwin" else "linux"
+
+
+def data_dir_for(system: str, environ, home: str) -> str:
+    """The packaged backend's data folder on `system`, for a user whose home
+    folder is `home`. Paths are joined the way that system writes them, so the
+    result does not depend on the computer that computes it."""
+    if system == "windows":
+        return ntpath.join(environ.get("LOCALAPPDATA") or ntpath.join(home, "AppData", "Local"), "VEILUX")
+    if system == "macos":
+        return posixpath.join(home, "Library", "Application Support", "VEILUX")
+    return posixpath.join(environ.get("XDG_DATA_HOME") or posixpath.join(home, ".local", "share"), "veilux")
 
 
 def prepare_data_dir(path: str) -> None:
@@ -547,6 +565,10 @@ class LogAnalysisRequest(SecretOptions):
     api_key: Optional[str] = None
     custom_provider: Optional[CustomProviderConfig] = None  # used when mode == "custom"
     openrouter_model: Optional[str] = Field(default=None, max_length=200)  # used when mode == "openrouter"
+    # The model the analyst chose for a built-in provider (Settings -> Providers
+    # and API keys). There is no built-in default: provider model lists change,
+    # so VEILUX never picks or swaps a model on its own.
+    model: Optional[str] = Field(default=None, max_length=200)
     # Granular sanitization controls
     enable_pattern_sanitization: bool = True
     custom_keywords: Optional[Dict[str, str]] = None  # Only enabled keywords
@@ -891,21 +913,65 @@ def is_internal_domain(domain: str, custom_suffixes: List[str]) -> bool:
     return False
 
 
+# Defanging rewrites a copy of indicators so they cannot be clicked or
+# resolved by accident: the scheme (http -> hxxp, keeping its letter case),
+# every dot in a URL's host and in e-mail domains, IPv4 addresses and bare
+# domain names (only when they end in a real public suffix, so file names
+# such as cmd.exe stay as they are). Paths and query strings are left alone.
+# The original evidence is never changed: /defang returns the original next
+# to the defanged copy, and refang_text reverses every form written here.
+_DEFANG_LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+_DEFANG_TOKENS = re.compile(
+    r"(?P<url>\b(?P<scheme>h(?:tt|xx)ps?|ftps?|sftp|wss?)://(?P<authority>[^\s/?#<>\"'`]+))"
+    r"|(?P<email>[A-Za-z0-9._%+-]{1,64}@" + _DEFANG_LABEL + r"(?:\." + _DEFANG_LABEL + r")+\b)"
+    r"|(?P<ipv4>\b(?:\d{1,3}\.){3}\d{1,3}\b)"
+    r"|(?P<domain>(?<![\w.@/\\-])(?:" + _DEFANG_LABEL + r"\.)+[A-Za-z][A-Za-z0-9-]{0,62}(?![\w-]|\.\w))",
+    re.IGNORECASE)
+
+
+_UNBRACKETED_DOT = re.compile(r"(?<!\[)\.(?!\])")
+_UNBRACKETED_AT = re.compile(r"(?<!\[)@(?!\])")
+
+
+def _defang_scheme(scheme: str) -> str:
+    if scheme.lower().startswith("http"):
+        return scheme[0] + ("XX" if scheme[1].isupper() else "xx") + scheme[3:]
+    return scheme
+
+
+def _defang_match(match) -> str:
+    if match.group("url"):
+        authority = match.group("authority")
+        trailing = ""
+        while authority and authority[-1] in ".,;:)":
+            trailing = authority[-1] + trailing
+            authority = authority[:-1]
+        authority = _UNBRACKETED_AT.sub("[@]", _UNBRACKETED_DOT.sub("[.]", authority))
+        return _defang_scheme(match.group("scheme")) + "://" + authority + trailing
+    if match.group("email"):
+        local, _, domain = match.group("email").rpartition("@")
+        return local + "[@]" + domain.replace(".", "[.]")
+    if match.group("ipv4"):
+        return match.group("ipv4").replace(".", "[.]")
+    domain = match.group("domain")
+    parts = _ti_public_suffix(domain)
+    if parts.suffix and parts.domain:
+        return domain.replace(".", "[.]")
+    return domain
+
+
 def defang_text(text: str) -> str:
-    result = text
-    result = re.sub(r'http://', 'hXXp://', result, flags=re.IGNORECASE)
-    result = re.sub(r'https://', 'hXXps://', result, flags=re.IGNORECASE)
-    result = re.sub(r'\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b', r'\1[.]\2[.]\3[.]\4', result)
-    result = re.sub(r'@(?!\[)', '[@]', result)
-    return result
+    return _DEFANG_TOKENS.sub(_defang_match, text)
 
 
 def refang_text(text: str) -> str:
     result = text
-    result = re.sub(r'hXXp://', 'http://', result, flags=re.IGNORECASE)
-    result = re.sub(r'hXXps://', 'https://', result, flags=re.IGNORECASE)
+    # hxxp/hXXp/HXXP -> http/http/HTTP (hXXp is how VEILUX 1.0.0 wrote it).
+    result = re.sub(r'\b(h)(xx)(ps?)://', lambda m: m.group(1) + ("TT" if m.group(1).isupper() and m.group(2).isupper() else "tt") + m.group(3) + "://",
+                    result, flags=re.IGNORECASE)
     result = result.replace('[.]', '.').replace('[dot]', '.')
     result = result.replace('[@]', '@').replace('[at]', '@')
+    result = result.replace('[:]', ':')
     return result
 
 
@@ -2144,11 +2210,11 @@ def _save_threat_intel_cache():
 async def query_virustotal(client: httpx.AsyncClient, ioc: str, ioc_type: str, api_key: str) -> Optional[Dict]:
     try:
         if ioc_type == "ip":
-            url = f"https://www.virustotal.com/api/v3/ip_addresses/{ioc}"
+            url = f"https://www.virustotal.com/api/v3/ip_addresses/{quote(ioc, safe='')}"
         elif ioc_type == "domain":
-            url = f"https://www.virustotal.com/api/v3/domains/{ioc}"
+            url = f"https://www.virustotal.com/api/v3/domains/{quote(ioc, safe='')}"
         elif ioc_type == "hash":
-            url = f"https://www.virustotal.com/api/v3/files/{ioc}"
+            url = f"https://www.virustotal.com/api/v3/files/{quote(ioc, safe='')}"
         elif ioc_type == "url":
             url_id = base64.urlsafe_b64encode(ioc.encode()).decode().rstrip("=")
             url = f"https://www.virustotal.com/api/v3/urls/{url_id}"
@@ -2303,7 +2369,7 @@ async def query_rdap(client: httpx.AsyncClient, ioc: str, ioc_type: str) -> Opti
     if ioc_type == 'domain':
         queried = _ti_public_suffix(queried).top_domain_under_public_suffix or queried
     scope = {'requested_domain': ioc, 'queried_domain': queried} if ioc_type == 'domain' else {}
-    url = f"https://rdap.org/{'ip' if ioc_type == 'ip' else 'domain'}/{queried}"
+    url = f"https://rdap.org/{'ip' if ioc_type == 'ip' else 'domain'}/{quote(queried, safe='')}"
     try:
         response = await client.get(url, headers={"Accept": "application/rdap+json"},
                                     timeout=15.0, follow_redirects=True)
@@ -3107,9 +3173,9 @@ async def _analyze_logs(request: LogAnalysisRequest):
                                       config.endpoint.replace("{model}", quote(config.model.removeprefix("models/"), safe="")), prompt)
         elif request.mode == "openrouter" and request.api_key and (request.openrouter_model or "").strip():
             sent = _record_ai_request("OpenRouter", request.openrouter_model.strip(), f"{OPENROUTER_API}/chat/completions", prompt)
-        elif request.mode in AI_PROVIDERS and request.api_key:
-            name, endpoint, model = AI_PROVIDERS[request.mode]
-            sent = _record_ai_request(name, model, endpoint, prompt)
+        elif request.mode in AI_PROVIDERS and request.api_key and (request.model or "").strip():
+            model = request.model.strip()
+            sent = _record_ai_request(AI_PROVIDERS[request.mode][0], model, provider_endpoint(request.mode, model), prompt)
         else:
             sent = None
 
@@ -3134,7 +3200,10 @@ async def _analyze_logs(request: LogAnalysisRequest):
             if not request.api_key:
                 raise HTTPException(status_code=400, detail=f"{request.mode} API key required")
 
-            analysis = await asyncio.wait_for(ai_funcs[request.mode](prompt, request.api_key), AI_TIMEOUT_SECONDS)
+            # The chosen model is passed only when there is one; the provider call
+            # refuses to run without it (chosen_model), so nothing is sent.
+            model_argument = {"model": request.model.strip()} if (request.model or "").strip() else {}
+            analysis = await asyncio.wait_for(ai_funcs[request.mode](prompt, request.api_key, **model_argument), AI_TIMEOUT_SECONDS)
         _job_context.get()["timings_ms"]["ai"] = (time.perf_counter()-ai_started)*1000
         if sent:
             sent["outcome"] = "answered"
@@ -3165,7 +3234,8 @@ async def _analyze_logs(request: LogAnalysisRequest):
     except asyncio.TimeoutError:
         raise HTTPException(504, "AI request timed out. Retry or select another provider.")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)[:200])
+        log.warning(f"Analysis failed: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail=public_error(e))
 
 
 @app.post("/threat-intel/lookup")
@@ -3184,7 +3254,9 @@ async def threat_intel_lookup_endpoint(request: ThreatIntelLookupRequest):
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Secret scan could not complete; threat-intelligence sending stopped: {exc}")
+        log.warning(f"Secret scan before a lookup failed: {type(exc).__name__}")
+        raise HTTPException(status_code=500, detail="Secret scan could not complete; threat-intelligence sending stopped: "
+                            + public_error(exc))
     ioc = request.ioc.strip()
     if not ioc:
         raise HTTPException(status_code=400, detail="No IOC provided")
@@ -3325,16 +3397,21 @@ async def call_custom_ai(prompt: str, api_key: Optional[str], config: "CustomPro
     try:
         # Gemini embeds its model in the URL. Explicit templates also work for
         # company gateways; encode the model as one path component.
-        url = httpx.URL(config.endpoint.replace("{model}", quote(config.model.removeprefix("models/"), safe="")))
+        url = checked_destination(config.endpoint.replace("{model}", quote(config.model.removeprefix("models/"), safe="")),
+                                  f"{label}: the service URL", allow_userinfo=True)
         # One deadline covers all attempts, including a compatibility retry.
         async with asyncio.timeout(config.timeout_seconds):
-            async with httpx.AsyncClient(timeout=config.timeout_seconds) as client:
+            async with httpx.AsyncClient(timeout=config.timeout_seconds, follow_redirects=False) as client:
                 for attempt in range(3):
                     response = await client.post(url, headers=headers, json=payload)
                     if response.status_code == 200 or attempt == 2 or not _adjust_custom_request(response, payload, fmt):
                         break
     except (httpx.TimeoutException, asyncio.TimeoutError):
         raise HTTPException(504, f"{label}: the service took too long to reply. Try again or choose another model.")
+    except DestinationError as exc:
+        if " is refused: " in str(exc):
+            raise HTTPException(400, str(exc))
+        raise HTTPException(400, f"{label}: enter a complete service URL starting with http:// or https://.")
     except (httpx.InvalidURL, httpx.UnsupportedProtocol):
         raise HTTPException(400, f"{label}: enter a complete service URL starting with http:// or https://.")
     except httpx.RequestError:
@@ -3358,51 +3435,84 @@ async def call_custom_ai(prompt: str, api_key: Optional[str], config: "CustomPro
     return text
 
 
-# Built-in providers: name, endpoint and model, also shown in the record of
-# what was sent.
+# Built-in providers: name and chat endpoint ({model} is filled for Gemini).
+# The model is always the analyst's choice from the provider's own model list
+# (/providers/{provider}/models); none is built in, because providers retire
+# model IDs and a fixed one eventually fails for everyone.
 AI_PROVIDERS = {
-    "groq": ("Groq", "https://api.groq.com/openai/v1/chat/completions", "llama-3.3-70b-versatile"),
-    "deepseek": ("DeepSeek", "https://api.deepseek.com/v1/chat/completions", "deepseek-chat"),
-    "together": ("Together AI", "https://api.together.xyz/v1/chat/completions", "Qwen/Qwen2.5-72B-Instruct-Turbo"),
-    "gemini": ("Gemini", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", "gemini-2.5-flash"),
-    "claude": ("Claude", "https://api.anthropic.com/v1/messages", "claude-sonnet-4-6"),
+    "groq": ("Groq", "https://api.groq.com/openai/v1/chat/completions"),
+    "deepseek": ("DeepSeek", "https://api.deepseek.com/v1/chat/completions"),
+    "together": ("Together AI", "https://api.together.xyz/v1/chat/completions"),
+    "gemini": ("Gemini", "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"),
+    "claude": ("Claude", "https://api.anthropic.com/v1/messages"),
 }
+MODEL_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}")
+# What providers say when a model is retired, renamed or not open to the key.
+_MODEL_UNAVAILABLE = re.compile(
+    r"model_not_found|model[^.\n]{0,120}(does not exist|not found|not exist|decommissioned|deprecated|no longer|"
+    r"not supported|not available|unknown|invalid|retired|access)|unknown model|no such model|not_found_error",
+    re.IGNORECASE)
 
 
-async def call_groq_ai(prompt: str, api_key: str) -> str:
-    async with httpx.AsyncClient(timeout=60.0) as client:
+def provider_endpoint(mode: str, model: str) -> str:
+    return AI_PROVIDERS[mode][1].replace("{model}", quote(model.removeprefix("models/"), safe=""))
+
+
+def chosen_model(mode: str, model: Optional[str]) -> str:
+    """The model the analyst chose, or a clear 400 before anything is sent."""
+    name = AI_PROVIDERS[mode][0]
+    value = (model or "").strip()
+    if not value:
+        raise HTTPException(400, f"Choose a {name} model first: Settings → Providers and API keys → "
+                                 f"{name} model → Load models. VEILUX does not pick a model for you.")
+    if not MODEL_ID_PATTERN.fullmatch(value):
+        raise HTTPException(400, f"{name}: “{value[:80]}” is not a valid model ID. Choose one from Load models.")
+    return value
+
+
+def provider_failure(name: str, model: Optional[str], response: httpx.Response) -> HTTPException:
+    """A clear error for a failed provider call. Never retries with another model."""
+    detail = _extract_api_error_detail(response)
+    code = response.status_code
+    text = detail or ""
+    if code in (401, 403) and not _MODEL_UNAVAILABLE.search(text):
+        return HTTPException(code, f"{name} refused the API key (HTTP {code}). Check the key in Settings → Providers and API keys.")
+    if code == 429:
+        return HTTPException(429, f"{name} is rate-limiting this key right now (HTTP 429). Wait a moment and try again.")
+    if model and (code == 404 or _MODEL_UNAVAILABLE.search(text)):
+        return HTTPException(400, f"{name}: the model “{model}” is not available to this API key (it may have been "
+                                  "retired or renamed). Choose another model in Settings → Providers and API keys → "
+                                  f"{name} model → Load models. No other model was tried.")
+    return HTTPException(code if 400 <= code < 600 else 502, f"{name} returned HTTP {code}" + (f": {text[:200]}" if text else "."))
+
+
+async def _openai_style_chat(mode: str, prompt: str, api_key: str, model: Optional[str], timeout: float) -> str:
+    name, endpoint = AI_PROVIDERS[mode]
+    model = chosen_model(mode, model)
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
         response = await client.post(
-            AI_PROVIDERS["groq"][1],
+            endpoint,
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": AI_PROVIDERS["groq"][2], "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 4000}
+            json={"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 4000}
         )
     if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail=f"Groq: {response.text[:100]}")
-    return response.json()["choices"][0]["message"]["content"]
+        raise provider_failure(name, model, response)
+    try:
+        return response.json()["choices"][0]["message"]["content"]
+    except (ValueError, KeyError, IndexError, TypeError):
+        raise HTTPException(502, f"{name} ({model}) returned an answer VEILUX could not read.") from None
 
 
-async def call_deepseek_ai(prompt: str, api_key: str) -> str:
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(
-            AI_PROVIDERS["deepseek"][1],
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": AI_PROVIDERS["deepseek"][2], "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 4000}
-        )
-    if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail=f"DeepSeek: {response.text[:100]}")
-    return response.json()["choices"][0]["message"]["content"]
+async def call_groq_ai(prompt: str, api_key: str, model: Optional[str] = None) -> str:
+    return await _openai_style_chat("groq", prompt, api_key, model, 60.0)
 
 
-async def call_together_ai(prompt: str, api_key: str) -> str:
-    async with httpx.AsyncClient(timeout=90.0) as client:
-        response = await client.post(
-            AI_PROVIDERS["together"][1],
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": AI_PROVIDERS["together"][2], "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 4000}
-        )
-    if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail=f"Together: {response.text[:100]}")
-    return response.json()["choices"][0]["message"]["content"]
+async def call_deepseek_ai(prompt: str, api_key: str, model: Optional[str] = None) -> str:
+    return await _openai_style_chat("deepseek", prompt, api_key, model, 120.0)
+
+
+async def call_together_ai(prompt: str, api_key: str, model: Optional[str] = None) -> str:
+    return await _openai_style_chat("together", prompt, api_key, model, 90.0)
 
 
 OPENROUTER_API = "https://openrouter.ai/api/v1"
@@ -3485,10 +3595,11 @@ def openrouter_free_models(models: list, today: Optional[str] = None) -> list:
     return sorted(result, key=lambda m: m["name"].lower())
 
 
-async def call_gemini_ai(prompt: str, api_key: str) -> str:
-    async with httpx.AsyncClient(timeout=180.0) as client:
+async def call_gemini_ai(prompt: str, api_key: str, model: Optional[str] = None) -> str:
+    model = chosen_model("gemini", model)
+    async with httpx.AsyncClient(timeout=180.0, follow_redirects=False) as client:
         response = await client.post(
-            AI_PROVIDERS["gemini"][1],
+            provider_endpoint("gemini", model),
             headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
@@ -3505,7 +3616,7 @@ async def call_gemini_ai(prompt: str, api_key: str) -> str:
             }
         )
     if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail=f"Gemini: {response.text[:200]}")
+        raise provider_failure("Gemini", model, response)
     result = response.json()
     if "candidates" in result and result["candidates"]:
         candidate = result["candidates"][0]
@@ -3520,8 +3631,9 @@ async def call_gemini_ai(prompt: str, api_key: str) -> str:
     raise HTTPException(status_code=500, detail="Bad Gemini response — no candidates returned")
 
 
-async def call_claude_ai(prompt: str, api_key: str) -> str:
-    async with httpx.AsyncClient(timeout=120.0) as client:
+async def call_claude_ai(prompt: str, api_key: str, model: Optional[str] = None) -> str:
+    model = chosen_model("claude", model)
+    async with httpx.AsyncClient(timeout=120.0, follow_redirects=False) as client:
         response = await client.post(
             AI_PROVIDERS["claude"][1],
             headers={
@@ -3529,10 +3641,10 @@ async def call_claude_ai(prompt: str, api_key: str) -> str:
                 "anthropic-version": "2023-06-01",
                 "Content-Type": "application/json"
             },
-            json={"model": AI_PROVIDERS["claude"][2], "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 4000}
+            json={"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 4000}
         )
     if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail=f"Claude: {response.text[:100]}")
+        raise provider_failure("Claude", model, response)
     result = response.json()
     return result["content"][0]["text"]
 
@@ -3560,19 +3672,47 @@ def _normalize_regex_for_python(pattern: str) -> str:
     return _JS_NAMED_GROUP.sub(r'(?P<\1>', pattern or "")
 
 
+# The link pattern is written by the analyst, but the links it reads come from
+# web pages. A pattern with nested repetition can take exponential time on a
+# crafted link, so matching uses the bounded regex engine (as custom rules do):
+# each match stops after LINK_MATCH_SECONDS, and patterns and links are capped.
+LINK_PATTERN_MAX_LENGTH = 2000
+LINK_MAX_LENGTH = 8192
+MAX_LINKS = 500
+LINK_MATCH_SECONDS = 0.25
+
+
+class LinkPatternTimeout(ValueError):
+    pass
+
+
+@lru_cache(maxsize=32)
+def _link_pattern(link_regex: str):
+    return bounded_regex.compile(_normalize_regex_for_python(link_regex), bounded_regex.VERSION0)
+
+
 def parse_siem_link(url: str, link_regex: str) -> Optional[Dict[str, str]]:
     """Apply a connector's link-parsing regex to a SIEM link/URL, returning
     its named capture groups (percent-decoded) as fetch params, or None if it
-    doesn't match / the regex itself is invalid."""
+    doesn't match / the regex itself is invalid. Raises LinkPatternTimeout
+    when the pattern takes too long on this link."""
+    if not link_regex or len(link_regex) > LINK_PATTERN_MAX_LENGTH:
+        siem_log.warning("The link pattern is empty or too long.")
+        return None
+    if not url or len(url) > LINK_MAX_LENGTH:
+        return None
     try:
-        match = re.search(_normalize_regex_for_python(link_regex), url)
-        if not match or not match.groupdict():
-            return None
-        params = {k: unquote(v) for k, v in match.groupdict().items() if v is not None}
-        return params or None
-    except re.error as e:
+        match = _link_pattern(link_regex).search(url, timeout=LINK_MATCH_SECONDS)
+    except bounded_regex.error as e:
         siem_log.warning(f"Invalid link_regex: {e}")
         return None
+    except TimeoutError:
+        raise LinkPatternTimeout("The link pattern took too long to read a link. Simplify the pattern: "
+                                 "avoid repeating a group that itself repeats, such as (a+)+.") from None
+    if not match or not match.groupdict():
+        return None
+    params = {k: unquote(v) for k, v in match.groupdict().items() if v is not None}
+    return params or None
 
 
 # Template placeholder: ${name} or ${name+N} / ${name-N} for numeric offsets
@@ -3648,7 +3788,7 @@ async def fetch_single_log(client: httpx.AsyncClient, base_url: str, params: Dic
                            response_path: str) -> Optional[dict]:
     """Fetch a single document using a connector's API template, substituting
     the params captured from its link_regex into the path/body."""
-    url = base_url.rstrip('/') + _substitute_plain(path_template, params)
+    url = _connector_url(base_url, path_template, params)
 
     request_kwargs = {"headers": headers, "cookies": cookies}
     if body_template and body_template.strip():
@@ -3708,11 +3848,17 @@ def _build_siem_auth(request: "SiemFetchRequest") -> Tuple[dict, dict]:
 # In memory only: a restart asks for new ones.
 _OAUTH_TOKENS: Dict[str, Tuple[str, float]] = {}
 _oauth_clock = time.monotonic
+# The cache is looked up by an HMAC of the app sign-in, keyed with a random
+# value made at start-up and never saved. It is not a password hash: it only
+# lets the cache tell sign-ins apart without keeping the client secret, and
+# without the key nobody can test guesses of a secret against it.
+_OAUTH_CACHE_KEY = secrets.token_bytes(32)
 
 
 def _oauth_key(request: "SiemFetchRequest") -> str:
     parts = (request.oauth_token_url, request.oauth_client_id, request.oauth_client_secret, request.oauth_scope)
-    return hashlib.sha256("\n".join(str(p or "") for p in parts).encode("utf-8")).hexdigest()
+    message = "\n".join(str(p or "") for p in parts).encode("utf-8")
+    return hmac.new(_OAUTH_CACHE_KEY, message, "sha256").hexdigest()
 
 
 def _first_line(text: str) -> str:
@@ -3734,6 +3880,9 @@ async def _oauth_access_token(request: "SiemFetchRequest") -> str:
         raise HTTPException(400, "The token address is not a valid URL.")
     if url.userinfo or not url.host or not (url.scheme == "https" or (url.scheme == "http" and is_loopback_address(url.host))):
         raise HTTPException(400, "The token address must be an https:// address without a user name or password.")
+    refused = refused_destination_reason(url.host)
+    if refused:
+        raise HTTPException(400, "The token address is refused: " + refused)
     key = _oauth_key(request)
     cached = _OAUTH_TOKENS.get(key)
     if cached and cached[1] > _oauth_clock():
@@ -3900,12 +4049,146 @@ def _require_connector_values(templates, params):
         raise ValueError("Missing request values: " + ', '.join(sorted(missing)) + ". No value source supplied them for this page. Open the page that shows them, or add a value source or fixed value under Request values.")
 
 
+# ---- Where connector requests may go ----
+# The analyst chooses the API address, and it is usually inside their own
+# network (a SIEM at 10.x, siem.corp.local, localhost). Private and loopback
+# addresses are therefore allowed. What must never decide the destination is
+# data VEILUX reads while working: values taken from a web page, a search ID or
+# a context document returned by the API, a page token. Those values only ever
+# fill path segments and query parameters, and every built address is checked
+# to stay on the configured API address. Cloud instance-metadata endpoints are
+# refused outright: no SIEM lives there, and they hand out cloud credentials.
+class DestinationError(ValueError):
+    """An outbound address VEILUX refuses to contact. The message is safe to show."""
+
+
+_METADATA_HOSTS = {"metadata.google.internal", "metadata.goog", "metadata", "instance-data",
+                   "instance-data.ec2.internal", "metadata.azure.internal"}
+_METADATA_ADDRESSES = {ipaddress.ip_address("fd00:ec2::254")}
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _host_address(host: str):
+    """The IP address a host names without a DNS lookup, or None for a name.
+    Also reads the legacy IPv4 spellings (2852039166, 0xa9fea9fe, 169.254.43518)
+    that the system resolver accepts."""
+    name = (host or "").strip().strip("[]").rstrip(".").lower()
+    try:
+        address = ipaddress.ip_address(name.split("%", 1)[0])
+    except ValueError:
+        if not name or not re.fullmatch(r"[0-9a-fx.]+", name) or not re.search(r"[0-9]", name):
+            return None
+        try:
+            address = ipaddress.ip_address(socket.inet_aton(name))
+        except OSError:
+            return None
+    if address.version == 6 and address.ipv4_mapped:
+        address = address.ipv4_mapped
+    return address
+
+
+def refused_destination_reason(host: str) -> Optional[str]:
+    """Why VEILUX will not contact this host, or None. Private networks and this
+    computer are allowed; link-local, cloud-metadata, multicast, unspecified
+    and reserved addresses are not."""
+    name = (host or "").strip().strip("[]").rstrip(".").lower()
+    if not name:
+        return "The address has no host name."
+    if name in _METADATA_HOSTS:
+        return "VEILUX does not contact cloud instance-metadata addresses."
+    address = _host_address(name)
+    if address is None:
+        return None
+    if address in _METADATA_ADDRESSES or address.is_link_local:
+        return "VEILUX does not contact link-local or cloud instance-metadata addresses (such as 169.254.169.254)."
+    if address.is_multicast or address.is_unspecified or (address.is_reserved and not address.is_loopback):
+        return "This IP address cannot be used as an API address."
+    return None
+
+
+def checked_destination(address: str, what: str = "The address", allow_userinfo: bool = False) -> httpx.URL:
+    """Parse an analyst-configured address and refuse what VEILUX never contacts."""
+    text = (address or "").strip()
+    try:
+        url = httpx.URL(text)
+    except Exception:
+        raise DestinationError(f"{what} is not a valid URL.") from None
+    if url.scheme not in ("http", "https") or not url.host:
+        raise DestinationError(f"{what} must be a complete http:// or https:// address.")
+    if url.userinfo and not allow_userinfo:
+        raise DestinationError(f"{what} must not contain a user name or password. "
+                               "Enter them under the connection's Sign-in step instead.")
+    reason = refused_destination_reason(url.host)
+    if reason:
+        raise DestinationError(f"{what} is refused: {reason}")
+    return url
+
+
+def connector_base(base_url: str) -> httpx.URL:
+    url = checked_destination(base_url, "The API address")
+    if url.query or url.fragment:
+        raise DestinationError("The API address must not contain ? or #. Put query values in the request settings.")
+    return url
+
+
+def _same_destination(base: httpx.URL, built: str) -> str:
+    """The built address, if it is on the API address: same scheme, host and
+    port, under the API address's path, without dot segments."""
+    target = httpx.URL(built)
+    if (target.scheme, target.host, target.port) != (base.scheme, base.host, base.port) or target.userinfo:
+        raise DestinationError("The request would leave the configured API address, so it was not sent.")
+    base_path = base.path.rstrip("/")
+    segments = target.path.split("/")
+    if any(segment in (".", "..") for segment in segments) or not (target.path == base_path or target.path.startswith(base_path + "/")):
+        raise DestinationError("The request path would leave the API address's path, so it was not sent.")
+    return str(target)
+
+
+def _path_value(value: str) -> str:
+    """One value placed in a request path, encoded as a single path segment.
+    A value that would step out of the path is refused, even if a server
+    decodes %2F before resolving dot segments."""
+    text = str(value)
+    if _CONTROL_CHARACTERS.search(text):
+        raise DestinationError("A request value contains control characters, so the request was not sent.")
+    if any(part in (".", "..") for part in re.split(r"[/\\]", text)):
+        raise DestinationError("A request value would change the request path (it contains . or ..), so the request was not sent.")
+    return quote(text, safe="")
+
+
 def _connector_url(base_url, template, params):
     if not template or not template.startswith('/') or template.startswith('//'):
         raise ValueError("Enter a request path beginning with /, relative to the API address.")
+    base = connector_base(base_url)
     _require_connector_values([template], params)
-    path = _TEMPLATE_VAR.sub(lambda m: quote(_render_template_var(params, m.group(1), m.group(2), m.group(3)), safe=''), template)
-    return base_url.rstrip('/') + path
+    path = _TEMPLATE_VAR.sub(lambda m: _path_value(_render_template_var(params, m.group(1), m.group(2), m.group(3))), template)
+    return _same_destination(base, str(base).rstrip('/') + path)
+
+
+def _plain_url(base_url, template):
+    """The address for a fixed path (connection check, platform probes): the
+    template has no values from pages or responses, and it must stay on the
+    API address like every other request."""
+    template = template or '/'
+    if not template.startswith('/') or template.startswith('//'):
+        raise DestinationError("Enter a connection check path beginning with /, relative to the API address.")
+    base = connector_base(base_url)
+    return _same_destination(base, str(base).rstrip('/') + template)
+
+
+def public_error(exc: BaseException) -> str:
+    """What a failed connector request tells the extension. VEILUX's own
+    messages (ValueError, RuntimeError, DestinationError) are written to be
+    shown; for anything else only the kind of failure is returned, and the
+    details stay in the backend's own log."""
+    if isinstance(exc, httpx.TimeoutException) or isinstance(exc, TimeoutError):
+        return "The request timed out."
+    if isinstance(exc, httpx.HTTPError):
+        return "The API could not be reached (" + type(exc).__name__ + "). Check the address and the network."
+    if isinstance(exc, (ValueError, RuntimeError)) and str(exc):
+        return _CONTROL_CHARACTERS.sub(" ", str(exc))[:500]
+    siem_log.debug("Connector request failed", exc_info=exc)
+    return "The request failed (" + type(exc).__name__ + "). The backend window has the details."
 
 
 def _connector_headers(headers, request, params):
@@ -3923,7 +4206,7 @@ async def fetch_context_document(client: httpx.AsyncClient, base_url: str, param
     if not request.context_path_template:
         return None
     portable = request.result_mode == 'records'
-    url = _connector_url(base_url, request.context_path_template, params) if portable else base_url.rstrip('/') + _substitute_plain(request.context_path_template, params)
+    url = _connector_url(base_url, request.context_path_template, params)
     if portable:
         headers = _connector_headers(headers, request, params)
     try:
@@ -3962,7 +4245,7 @@ async def fetch_via_search_job(client: httpx.AsyncClient, base_url: str, params:
         # job_id is supplied by the create response; all other values must already exist.
         _require_connector_values([request.job_status_path_template, request.job_results_path_template], {**params, 'job_id': ''})
         headers = _connector_headers(headers, request, params)
-    create_url = _connector_url(base_url, request.job_create_path_template, params) if portable else base_url.rstrip('/') + _substitute_plain(request.job_create_path_template, params)
+    create_url = _connector_url(base_url, request.job_create_path_template, params)
     create_kwargs = {"headers": headers, "cookies": cookies}
     as_form = request.job_create_parameters_as == "form"
     has_body = bool(request.job_create_body_template and request.job_create_body_template.strip())
@@ -3992,7 +4275,7 @@ async def fetch_via_search_job(client: httpx.AsyncClient, base_url: str, params:
     job_params["job_id"] = str(job_id)
 
     # 2. Poll until complete / error / timeout
-    status_url = _connector_url(base_url, request.job_status_path_template, job_params) if portable else base_url.rstrip('/') + _substitute_plain(request.job_status_path_template, job_params)
+    status_url = _connector_url(base_url, request.job_status_path_template, job_params)
     complete_values = {str(v).upper() for v in request.job_complete_values}
     error_values = {str(v).upper() for v in (request.job_error_values or [])}
     deadline = asyncio.get_event_loop().time() + max(request.job_timeout_seconds, 1.0)
@@ -4014,7 +4297,7 @@ async def fetch_via_search_job(client: httpx.AsyncClient, base_url: str, params:
         await asyncio.sleep(max(request.job_poll_interval_seconds, 0.5))
 
     # 3. Fetch results, page by page when offset pagination is set
-    results_url = _connector_url(base_url, request.job_results_path_template, job_params) if portable else base_url.rstrip('/') + _substitute_plain(request.job_results_path_template, job_params)
+    results_url = _connector_url(base_url, request.job_results_path_template, job_params)
     paged = request.pagination_mode == 'offset' and bool(request.pagination_parameter.strip())
     records: List = []
     for page in range(request.max_pages if paged else 1):
@@ -4140,6 +4423,10 @@ async def _fetch_siem_logs(request: SiemFetchRequest):
     """
     if not request.siem_links and not request.parsed_params:
         raise HTTPException(status_code=400, detail="No SIEM links or parsed params provided")
+    try:
+        connector_base(request.siem_base_url)
+    except DestinationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
     # (?!) never matches: without a link pattern, links supply no values.
     link_regex = request.link_regex or r'(?!)'
@@ -4156,9 +4443,14 @@ async def _fetch_siem_logs(request: SiemFetchRequest):
         if missing:
             raise HTTPException(status_code=400, detail="Enter the search job's " + ", ".join(missing) + " in the connection's API request step.")
 
+    if len(request.siem_links) > MAX_LINKS:
+        raise HTTPException(status_code=400, detail=f"Too many links in one request (at most {MAX_LINKS}).")
     parsed_links = []
     for link in request.siem_links:
-        parsed = parse_siem_link(link, link_regex)
+        try:
+            parsed = parse_siem_link(link, link_regex)
+        except LinkPatternTimeout as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
         if parsed:
             parsed_links.append(parsed)
         else:
@@ -4197,7 +4489,7 @@ async def _fetch_siem_logs(request: SiemFetchRequest):
     # timeout only bounds individual requests, not the whole job.
     request_timeout = 30.0 if request.fetch_mode != "search_job" else max(30.0, request.job_poll_interval_seconds + 15.0)
 
-    async with httpx.AsyncClient(timeout=request_timeout, verify=await _connector_verify(request)) as client:
+    async with httpx.AsyncClient(timeout=request_timeout, verify=await _connector_verify(request), follow_redirects=False) as client:
         if request.result_mode == 'records':
             client.cookies.update(cookies)
         for params in unique_links:
@@ -4273,7 +4565,7 @@ async def _fetch_siem_logs(request: SiemFetchRequest):
                 if certificate_error:
                     raise HTTPException(502, certificate_error) from e
                 label = _describe_request_values(params)
-                errors.append((f"For {label}: " if label else "") + (str(e) or "The request timed out."))
+                errors.append((f"For {label}: " if label else "") + public_error(e))
                 if request.result_mode == 'records' and context_doc is not None:
                     failed_count += 1
                 if context_doc is not None:
@@ -4384,7 +4676,7 @@ async def _detect_platform(client: httpx.AsyncClient, base_url: str,
                            headers: dict, cookies: dict) -> Optional[Dict]:
     for key, label, path, marker in PLATFORM_PROBES:
         try:
-            resp = await client.get(base_url.rstrip('/') + path,
+            resp = await client.get(_plain_url(base_url, path),
                                     headers=headers, cookies=cookies, timeout=6.0)
             if resp.status_code == 200 and marker in resp.text.lower():
                 return {"platform": key, "label": label, "health_path": path, "authenticated": True}
@@ -4398,13 +4690,17 @@ async def test_siem_connection(request: SiemFetchRequest):
     """Test SIEM connectivity — tries to reach the SIEM's health-check path with the provided auth.
     On a wrong-path failure, probes known platform fingerprints so the UI can
     suggest the right preset ('this looks like IBM QRadar')."""
+    try:
+        connector_base(request.siem_base_url)
+    except DestinationError as exc:
+        return {"status": "error", "message": str(exc)}
     headers, cookies = _build_siem_auth(request)
     await _apply_oauth(request, headers)
     test_path = request.test_path or '/'
 
     try:
-        async with httpx.AsyncClient(timeout=10.0, verify=await _connector_verify(request)) as client:
-            url = f"{request.siem_base_url.rstrip('/')}{test_path}"
+        async with httpx.AsyncClient(timeout=10.0, verify=await _connector_verify(request), follow_redirects=False) as client:
+            url = _plain_url(request.siem_base_url, test_path)
             response = await client.get(url, headers=headers, cookies=cookies)
             if response.status_code == 200:
                 return {"status": "connected", "http_code": 200,
@@ -4451,7 +4747,8 @@ async def test_siem_connection(request: SiemFetchRequest):
     except HTTPException:
         raise
     except Exception as e:
-        return {"status": "error", "message": str(e)[:200]}
+        siem_log.warning(f"Connection check failed: {type(e).__name__}")
+        return {"status": "error", "message": public_error(e)}
 
 
 @app.post("/feedback")
@@ -4572,6 +4869,144 @@ async def openrouter_free_models_endpoint():
     free = openrouter_free_models(models)
     return {"checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "total_models": len(models), "count": len(free), "models": free}
+
+
+# ---- Model lists ----
+# "Load models" in Settings asks the provider which models this key can use.
+# Only the API key is sent: never logs, notes, prompts or case data. Nothing is
+# cached and no model is chosen here; the analyst picks one.
+PROVIDER_MODEL_LISTS = {
+    "groq": "https://api.groq.com/openai/v1/models",
+    "deepseek": "https://api.deepseek.com/models",
+    "together": "https://api.together.xyz/v1/models",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/models",
+    "claude": "https://api.anthropic.com/v1/models",
+}
+# Listed by the providers, but they cannot answer a chat request.
+_NOT_CHAT_MODEL = re.compile(r"whisper|tts|embed|guard|moderation|transcri|speech|playai|orpheus|rerank|image",
+                             re.IGNORECASE)
+MODEL_LIST_MAX_PAGES = 5
+
+
+class ProviderModelsRequest(BaseModel):
+    api_key: Optional[str] = Field(default=None, max_length=1000)
+    custom_provider: Optional[CustomProviderConfig] = None  # for provider "custom"
+
+
+def _model_entry(model_id, name=None, context=None, created=None, owner=None):
+    return {"id": model_id, "name": str(name or model_id)[:120],
+            "context_length": context if isinstance(context, int) and not isinstance(context, bool) else None,
+            "created": created if isinstance(created, (int, str)) and not isinstance(created, bool) else None,
+            "owned_by": str(owner)[:80] if owner else None}
+
+
+def parse_model_list(style: str, body) -> List[Dict]:
+    """The chat-capable models in one page of a provider's model list."""
+    found = []
+    if style == "gemini":
+        for m in (body.get("models") if isinstance(body, dict) else None) or []:
+            if not isinstance(m, dict) or not isinstance(m.get("name"), str):
+                continue
+            if "generateContent" not in (m.get("supportedGenerationMethods") or []):
+                continue
+            model_id = m["name"].removeprefix("models/")
+            found.append(_model_entry(model_id, m.get("displayName"), m.get("inputTokenLimit")))
+        return found
+    items = body if isinstance(body, list) else (body.get("data") if isinstance(body, dict) else None)
+    for m in items or []:
+        if not isinstance(m, dict) or not isinstance(m.get("id"), str) or not m["id"].strip():
+            continue
+        if m.get("active") is False:
+            continue
+        kind = m.get("type")
+        if style == "together" and kind is not None and kind != "chat":
+            continue
+        if _NOT_CHAT_MODEL.search(m["id"]):
+            continue
+        found.append(_model_entry(m["id"], m.get("display_name") or m.get("name"),
+                                  m.get("context_window") or m.get("context_length"),
+                                  m.get("created") or m.get("created_at"), m.get("owned_by") or m.get("organization")))
+    return found
+
+
+def custom_models_url(config: CustomProviderConfig) -> str:
+    """Where a custom service lists its models, worked out from its chat URL;
+    DestinationError when it cannot be (the analyst then types the model ID)."""
+    url = checked_destination(config.endpoint.replace("{model}", "x"), f"{config.name or 'Custom model'}: the service URL",
+                              allow_userinfo=True)
+    path = url.path
+    if config.api_format == "openai" and path.endswith("/chat/completions") and "/openai/deployments/" not in path:
+        path = path[: -len("/chat/completions")] + "/models"
+    elif config.api_format == "anthropic" and path.endswith("/messages"):
+        path = path[: -len("/messages")] + "/models"
+    elif config.api_format == "gemini" and "/models/" in path:
+        path = path[: path.index("/models/")] + "/models"
+        url = url.copy_with(query=None)
+    else:
+        raise DestinationError("This service's model list cannot be found from its URL. Enter the model ID from the service instead.")
+    return str(url.copy_with(path=path))
+
+
+@app.post("/providers/{provider}/models")
+async def provider_models_endpoint(provider: str, request: ProviderModelsRequest):
+    """The models this API key can use, read from the provider's own model list."""
+    if provider == "custom":
+        config = request.custom_provider
+        if not config:
+            raise HTTPException(400, "Enter the custom model's connection details first.")
+        name, style = config.name or "Custom model", config.api_format
+        try:
+            url = custom_models_url(config)
+        except DestinationError as exc:
+            raise HTTPException(400, str(exc)) from None
+        headers = dict(config.extra_headers or {})
+    elif provider in PROVIDER_MODEL_LISTS:
+        name, style, url, headers = AI_PROVIDERS[provider][0], provider, PROVIDER_MODEL_LISTS[provider], {}
+        if not (request.api_key or "").strip():
+            raise HTTPException(400, f"Enter the {name} API key first.")
+    else:
+        raise HTTPException(404, "VEILUX cannot list models for this provider.")
+    key = (request.api_key or "").strip()
+    if key:
+        if style in ("gemini",):
+            headers["x-goog-api-key"] = key
+        elif style in ("claude", "anthropic"):
+            headers["x-api-key"] = key
+        else:
+            headers["Authorization"] = f"Bearer {key}"
+    if style in ("claude", "anthropic"):
+        headers.setdefault("anthropic-version", "2023-06-01")
+    style = {"anthropic": "claude", "openai": "openai"}.get(style, style)
+
+    models, params = [], {"pageSize": "1000"} if style == "gemini" else ({"limit": "1000"} if style == "claude" else {})
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=False) as client:
+            for _ in range(MODEL_LIST_MAX_PAGES):
+                response = await client.get(url, headers=headers, params=params)
+                if response.status_code != 200:
+                    failure = provider_failure(name, None, response)
+                    if response.status_code == 404:
+                        failure = HTTPException(502, f"{name} has no model list at this address (HTTP 404). Enter the model ID instead.")
+                    raise failure
+                try:
+                    body = response.json()
+                except ValueError:
+                    raise HTTPException(502, f"{name}'s model list was not JSON.") from None
+                models.extend(parse_model_list(style, body))
+                if style == "gemini" and isinstance(body, dict) and body.get("nextPageToken"):
+                    params = {"pageSize": "1000", "pageToken": str(body["nextPageToken"])}
+                elif style == "claude" and isinstance(body, dict) and body.get("has_more") and body.get("last_id"):
+                    params = {"limit": "1000", "after_id": str(body["last_id"])}
+                else:
+                    break
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.warning(f"Model list for {name} failed: {type(exc).__name__}")
+        raise HTTPException(502, f"Could not read {name}'s model list. " + public_error(exc)) from None
+    unique = {m["id"]: m for m in models}
+    return {"provider": provider, "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "count": len(unique), "models": sorted(unique.values(), key=lambda m: m["name"].lower())}
 
 
 @app.get("/health")

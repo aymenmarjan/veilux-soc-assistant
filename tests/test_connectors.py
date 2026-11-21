@@ -27,6 +27,7 @@ import asyncio
 import base64
 import json
 import os
+import socket
 import sys
 import threading
 import time
@@ -43,8 +44,17 @@ import uvicorn                                            # noqa: E402
 
 import server                                             # noqa: E402
 
-MOCK_PORT = 9401
+# The mock SIEM listens on a loopback port the system chooses. The socket is
+# bound here, before the request payloads below use MOCK_URL, and handed to
+# uvicorn as it is, so no other program can take the port in between. (A
+# fixed port fails where the system reserves it: Windows can exclude ranges
+# such as 9367-9466.)
+MOCK_SOCKET = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+MOCK_SOCKET.bind(("127.0.0.1", 0))
+MOCK_SOCKET.listen(128)
+MOCK_PORT = MOCK_SOCKET.getsockname()[1]
 MOCK_URL = f"http://127.0.0.1:{MOCK_PORT}"
+_MOCK_SERVER = None
 
 mock = FastAPI()
 QRADAR = {"polls": 0, "seen_sec": None, "seen_version": None, "query": None}
@@ -256,10 +266,17 @@ async def rdap_ip():
 
 
 def start_mock():
-    threading.Thread(
-        target=lambda: uvicorn.run(mock, host="127.0.0.1", port=MOCK_PORT, log_level="error"),
-        daemon=True).start()
-    time.sleep(1.0)
+    """Starts the mock SIEM once, on MOCK_SOCKET, and waits until it serves."""
+    global _MOCK_SERVER
+    if _MOCK_SERVER is not None:
+        return
+    _MOCK_SERVER = uvicorn.Server(uvicorn.Config(mock, log_level="error"))
+    threading.Thread(target=lambda: _MOCK_SERVER.run(sockets=[MOCK_SOCKET]), daemon=True).start()
+    deadline = time.monotonic() + 30
+    while not _MOCK_SERVER.started:
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"The mock SIEM did not start on {MOCK_URL}")
+        time.sleep(0.05)
 
 
 def setup_module():

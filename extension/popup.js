@@ -81,6 +81,7 @@ const mappingTable = document.getElementById('mapping-table');
 const analysisOutput = document.getElementById('analysis-output');
 const statusText = document.getElementById('status-text');
 const logCount = document.getElementById('log-count');
+const LOG_SEPARATOR_TOKEN = '---LOG SEPARATOR---';
 const loadingOverlay = document.getElementById('loading-overlay');
 const loadingText = document.getElementById('loading-text');
 const feedbackSection = document.getElementById('feedback-section');
@@ -233,6 +234,9 @@ document.addEventListener('DOMContentLoaded', async function() {
   if (!result.analysisInProgress) await applyPendingAnswer((await caseStorage.get('pendingAnswer')).pendingAnswer);
   await window.VeiluxUI.initialize();
   await markCaseSeen();
+  // Start-up is complete: inputs, preferences and the chosen stage are in
+  // place. Only a marker for automated tests; nothing reads it.
+  document.body.dataset.ready = 'true';
 });
 
 // ---- A credential review the analyst walked away from ----
@@ -409,9 +413,10 @@ Array.prototype.forEach.call(analysisMode, function(radio) {
   radio.addEventListener('change', savePopupPreferences);
 });
 
-// Built-in and custom model IDs are unchanged; this only renders their selector.
+// Renders the provider selector and each provider's setup hint (key and model).
 async function renderCustomProviders() {
   const stored = await caseStorage.get(['customAiProviders', 'groqApiKey', 'deepseekApiKey', 'togetherApiKey', 'openrouterApiKey', 'geminiApiKey', 'claudeApiKey']);
+  const chosenModels = await VeiluxProviderModels.all(caseStorage);
   const providers = stored.customAiProviders || [];
   providerSelect.querySelectorAll('[data-custom-provider]').forEach(option => option.remove());
   configuredProviderLabels.clear();
@@ -419,7 +424,10 @@ async function renderCustomProviders() {
   Array.from(providerSelect.options).forEach(option => {
     const configured = !!stored[option.value + 'ApiKey'];
     option.textContent = names[option.value] + (configured ? ' · key saved' : ' · setup needed');
-    configuredProviderLabels.set(option.value, configured ? 'API key saved. Use Settings to test the connection.' : 'Add an API key in Settings before using this provider.');
+    const model = VeiluxProviderModels.PROVIDERS[option.value] ? chosenModels[option.value] : null;
+    const modelNote = !VeiluxProviderModels.PROVIDERS[option.value] ? ''
+      : model && model.id ? ' Model: ' + model.id + '.' : ' No model chosen yet: choose one in Settings → Providers and API keys.';
+    configuredProviderLabels.set(option.value, (configured ? 'API key saved. Use Settings to test the connection.' : 'Add an API key in Settings before using this provider.') + modelNote);
   });
   providers.forEach(function(p) {
     const option = document.createElement('option');
@@ -515,8 +523,21 @@ function resetSecretAnalysis() {
   document.getElementById('manual-hide-status').textContent = '';
   saveSecretSession();
 }
+// Pasted or edited logs: "---LOG SEPARATOR---" divides them, exactly as the
+// analysis request divides them, so the count, statistics and indicators see
+// the same logs the AI receives. Text without a separator is kept as it is.
+function splitLogInput(text) {
+  const value = typeof text === 'string' ? text : '';
+  if (!value.trim()) return [];
+  if (!value.includes(LOG_SEPARATOR_TOKEN)) return [value];
+  return value.split(LOG_SEPARATOR_TOKEN).map(log => log.trim()).filter(Boolean);
+}
+function updateLogCount() {
+  logCount.textContent = capturedLogs.length + ' log' + (capturedLogs.length !== 1 ? 's' : '');
+  window.VeiluxUI?.sourceSummary();
+}
 function syncManualFields() {
-  capturedLogs = logsTextarea.value ? logsTextarea.value.split('---LOG SEPARATOR---') : [];
+  capturedLogs = splitLogInput(logsTextarea.value);
   lastSanitizedLog = sanitizedTextarea.value;
   lastSanitizedAnalystData = sanitizedAnalystTextarea.value;
   saveLogs(); saveAnalystData(); saveSecretSession();
@@ -571,7 +592,8 @@ undoHideBtn.addEventListener('click', () => {
 });
 logsTextarea.addEventListener('input', () => {
   sanitizedLogsEdited = false;
-  capturedLogs = logsTextarea.value.trim() ? [logsTextarea.value] : [];
+  capturedLogs = splitLogInput(logsTextarea.value);
+  updateLogCount();
   if (pageReview) pageReview.close();
   // A pasted/edited log is associated with the page open at the time of the
   // edit, never with whichever tab happens to be active on a later click.
@@ -725,6 +747,25 @@ settingsBtn.addEventListener('click', function() {
 
 if (copyAnalystDataBtn) copyAnalystDataBtn.addEventListener('click', function() { copyToClipboard(analystDataTextarea ? analystDataTextarea.value : '', 'Case notes'); });
 copyLogsBtn.addEventListener('click', function() { copyToClipboard(logsTextarea.value, 'Logs'); });
+// Puts a separator at the cursor (or at the end), on its own line, so the next
+// pasted log is counted and analysed as a separate log.
+const insertSeparatorBtn = document.getElementById('insert-separator-btn');
+insertSeparatorBtn.addEventListener('click', function() {
+  if (logsTextarea.readOnly) return;
+  const value = logsTextarea.value;
+  const focused = document.activeElement === logsTextarea;
+  const start = focused ? logsTextarea.selectionStart : value.length;
+  const end = focused ? logsTextarea.selectionEnd : value.length;
+  const before = value.slice(0, start).replace(/[ \t]*$/, ''), after = value.slice(end).replace(/^[ \t]*/, '');
+  const insert = (before ? (before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n') : '')
+    + LOG_SEPARATOR_TOKEN + '\n\n';
+  logsTextarea.value = before + insert + after;
+  const cursor = (before + insert).length;
+  logsTextarea.focus();
+  logsTextarea.setSelectionRange(cursor, cursor);
+  logsTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+  updateStatus('Separator inserted. Paste the next log below it.', 'success');
+});
 copySanitizedBtn.addEventListener('click', function() { copyToClipboard(sanitizedTextarea.value, 'Sanitized'); });
 if (copySanitizedAnalystBtn) copySanitizedAnalystBtn.addEventListener('click', function() { copyToClipboard(sanitizedAnalystTextarea ? sanitizedAnalystTextarea.value : '', 'Sanitized case notes'); });
 copyMappingBtn.addEventListener('click', function() { copyToClipboard(formatMappingForCopy(), 'Mapping'); });
@@ -989,11 +1030,12 @@ async function defangText() {
     defangOutput.value = data.defanged;
     updateStatus('Defanged', 'success');
   } catch (e) {
+    // Offline: the same scheme form as the backend (http -> hxxp, keeping the
+    // letter case); without the backend's public-suffix list every dot is bracketed.
     defangOutput.value = text
-      .replace(/http:\/\//gi, 'hXXp://')
-      .replace(/https:\/\//gi, 'hXXps://')
-      .replace(/\./g, '[.]')
-      .replace(/@/g, '[@]');
+      .replace(/\b(h)(tt)(ps?):\/\//gi, (m, h, tt, rest) => h + (tt === 'TT' ? 'XX' : 'xx') + rest + '://')
+      .replace(/(?<!\[)\.(?!\])/g, '[.]')
+      .replace(/(?<!\[)@(?!\])/g, '[@]');
     updateStatus('Defanged (offline)', 'success');
   }
 }
@@ -1012,10 +1054,10 @@ async function refangText() {
     updateStatus('Refanged', 'success');
   } catch (e) {
     defangOutput.value = text
-      .replace(/hXXp:\/\//gi, 'http://')
-      .replace(/hXXps:\/\//gi, 'https://')
+      .replace(/\b(h)(xx)(ps?):\/\//gi, (m, h, xx, rest) => h + (h === 'H' && xx === 'XX' ? 'TT' : 'tt') + rest + '://')
       .replace(/\[\.\]/g, '.')
-      .replace(/\[@\]/g, '@');
+      .replace(/\[@\]/g, '@')
+      .replace(/\[:\]/g, ':');
     updateStatus('Refanged (offline)', 'success');
   }
 }
@@ -1531,9 +1573,7 @@ async function analyzeWithAI(task = null) {
   };
   const promptNow = () => task ? task.instructions : getSelectedPrompt();
   let text = (sanitizedLogsEdited ? sanitizedTextarea : logsTextarea).value.trim();
-  let logsToAnalyze = !text ? [] : text.includes('---LOG SEPARATOR---')
-    ? text.split('---LOG SEPARATOR---').map(function(l) { return l.trim(); }).filter(function(l) { return l; })
-    : [text];
+  let logsToAnalyze = splitLogInput(text);
 
   let analystContext = contextNow();
 
@@ -1578,6 +1618,9 @@ async function analyzeWithAI(task = null) {
       if (!apiKey) throw new Error(modeNames[mode] + ' API key not set. Go to Settings.');
     }
     const openrouterModel = mode === 'openrouter' ? (await VeiluxOpenRouter.current(caseStorage)).id : null;
+    // Built-in providers use the model chosen in Settings; none is picked for the analyst.
+    const providerModel = VeiluxProviderModels.PROVIDERS[mode] ? await VeiluxProviderModels.current(mode, caseStorage) : null;
+    if (VeiluxProviderModels.PROVIDERS[mode] && !providerModel) throw new Error(VeiluxProviderModels.missingMessage(mode));
     if (mode === 'openrouter' && !openrouterModel) {
       document.getElementById('openrouter-model-panel').open = true;
       window.VeiluxUI.reveal(document.getElementById('openrouter-model-panel'));
@@ -1608,7 +1651,7 @@ async function analyzeWithAI(task = null) {
         throw new Error('Inputs kept changing during credential review. Stop editing and try again.');
       }
       text = (sanitizedLogsEdited ? sanitizedTextarea : logsTextarea).value.trim();
-      logsToAnalyze = text.split('---LOG SEPARATOR---').map(l => l.trim()).filter(Boolean);
+      logsToAnalyze = splitLogInput(text);
       analystContext = contextNow();
       customPrompt = promptNow(); secretConfig = collectSecretProtection();
       const livePolicy = await caseStorage.get(['customRegexRules', 'heuristicFieldExclusions', 'heuristicSettings']);
@@ -1704,6 +1747,7 @@ async function analyzeWithAI(task = null) {
       payload.custom_provider = VeiluxCustomModels.requestConfig(customProvider);
     }
     if (openrouterModel) payload.openrouter_model = openrouterModel;
+    if (providerModel) payload.model = providerModel.id;
 
     // The request runs in the background worker (background.js), so closing
     // the popup does not cancel it. waitAndApplyAnalysis picks up the result.
@@ -1896,11 +1940,10 @@ function toggleSection(content, header) {
 }
 
 function updateUI() {
-  logCount.textContent = capturedLogs.length + ' log' + (capturedLogs.length !== 1 ? 's' : '');
   updateAnalyzeButtonState();
-  logsTextarea.value = capturedLogs.length ? capturedLogs.join('\n\n---LOG SEPARATOR---\n\n') : '';
+  logsTextarea.value = capturedLogs.length ? capturedLogs.join('\n\n' + LOG_SEPARATOR_TOKEN + '\n\n') : '';
   if (analystDataTextarea && analystDataTextarea.value !== analystData) analystDataTextarea.value = analystData;
-  window.VeiluxUI?.sourceSummary();
+  updateLogCount();
 }
 
 // The AI's answer is text: it is escaped first, so an answer can never add

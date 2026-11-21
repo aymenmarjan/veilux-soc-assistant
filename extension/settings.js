@@ -85,6 +85,14 @@ const addConnectorTrigger = document.getElementById('add-connector-trigger');
 const connectorForm = document.getElementById('connector-form');
 // OpenRouter model picker (openrouter_models.js); it saves the choice itself.
 const openRouterPicker = VeiluxOpenRouter.mount(document.getElementById('openrouter-model-picker'), { prefix: 'openrouter' });
+// Model pickers for the other built-in providers (provider_models.js); each saves its choice itself.
+const providerKeyInputs = {
+  groq: document.getElementById('groq-api-key'), deepseek: document.getElementById('deepseek-api-key'),
+  together: document.getElementById('together-api-key'), gemini: document.getElementById('gemini-api-key'),
+  claude: document.getElementById('claude-api-key')
+};
+const providerModelPickers = Object.entries(providerKeyInputs).map(([provider, keyInput]) =>
+  VeiluxProviderModels.mount(document.getElementById(provider + '-model-picker'), { provider, keyInput }));
 
 // DOM Elements - Local backend
 const backendUrlInput = document.getElementById('backend-url');
@@ -220,7 +228,7 @@ const SETTINGS_KEYS = [
   'enablePatternSanitization', 'enableJsonKeySanitization', 'enableCustomKeywords', 'enableStatisticsFieldSanitization',
   'jsonKeysList', 'statisticsFieldsList', 'customKeywordsList', 'customRegexRules', 'heuristicFieldExclusions', 'heuristicSettings', 'customCidrsList', 'customDomainsList', 'customPrompts', 'extractionOutputMode',
   'defaultPromptId', 'enableThreatIntel', 'connectorProfiles', 'customAiProviders', 'backendUrl',
-  'openrouterModel', 'openrouterModelInfo', 'caseSlots', 'maxRunningAnalyses', 'theme',
+  'openrouterModel', 'openrouterModelInfo', 'providerModels', 'caseSlots', 'maxRunningAnalyses', 'theme',
   'reportTemplates', 'defaultReportTemplateId', 'chatQuickQuestions'
 ];
 const API_KEY_SETTINGS = [
@@ -492,6 +500,7 @@ async function loadSettings() {
   openrouterApiKeyInput.value = settings.openrouterApiKey || '';
   geminiApiKeyInput.value = settings.geminiApiKey || '';
   claudeApiKeyInput.value = settings.claudeApiKey || '';
+  providerModelPickers.forEach(picker => picker.refresh());
   virustotalApiKeyInput.value = settings.virustotalApiKey || '';
   abuseipdbApiKeyInput.value = settings.abuseipdbApiKey || '';
   // Off by default — free-tier reputation APIs are rate-limited, and unlike
@@ -1173,6 +1182,7 @@ async function resetAllSettings() {
   backendUrlInput.value = '';
   backendTokenInput.value = '';
   openRouterPicker.refresh();
+  providerModelPickers.forEach(picker => picker.refresh());
   groqApiKeyInput.value = '';
   deepseekApiKeyInput.value = '';
   togetherApiKeyInput.value = '';
@@ -1437,6 +1447,28 @@ if (addCustomModelTrigger) addCustomModelTrigger.addEventListener('click', () =>
 if (cancelCustomModelBtn) cancelCustomModelBtn.addEventListener('click', closeCustomModelForm);
 if (saveCustomModelBtn) saveCustomModelBtn.addEventListener('click', saveCustomModel);
 if (testCustomModelBtn) testCustomModelBtn.addEventListener('click', testCustomModel);
+
+// Lists the custom service's models into the Model ID suggestions. Only the
+// key (and any extra headers) is sent; the analyst still chooses the ID.
+const cmLoadModels = document.getElementById('cm-load-models');
+const cmLoadStatus = document.getElementById('cm-load-models-status');
+if (cmLoadModels) cmLoadModels.addEventListener('click', async () => {
+  let extraHeaders = null;
+  try { extraHeaders = cmExtraHeaders.value.trim() ? JSON.parse(cmExtraHeaders.value) : null; }
+  catch (_) { cmLoadStatus.textContent = 'Fix Extra request headers first (JSON).'; return; }
+  if (!cmEndpoint.value.trim()) { cmLoadStatus.textContent = 'Enter the service URL first.'; cmEndpoint.focus(); return; }
+  cmLoadModels.disabled = true; cmLoadStatus.textContent = 'Asking the service for its models…';
+  try {
+    const models = await VeiluxProviderModels.list('custom', cmKey.value.trim(), { custom_provider: {
+      name: cmName.value.trim() || 'Custom model', api_format: cmFormat.value, endpoint: cmEndpoint.value.trim(),
+      model: cmModel.value.trim() || 'unset', extra_headers: extraHeaders } });
+    document.getElementById('cm-model-options').replaceChildren(...models.map(m => new Option(m.name && m.name !== m.id ? m.name : '', m.id)));
+    cmLoadStatus.textContent = models.length ? models.length + ' models found. Pick one in Model ID (start typing to filter).'
+      : 'The service listed no chat models. Enter the model ID yourself.';
+  } catch (e) {
+    cmLoadStatus.textContent = VeiluxProviderModels.failureText(e);
+  } finally { cmLoadModels.disabled = false; }
+});
 if (cmPreset) cmPreset.addEventListener('change', () => applyCustomModelPreset(cmPreset.value));
 
 /**
@@ -1538,66 +1570,46 @@ async function importSettingsFromFile(file) {
   showSuccess('Settings imported from ' + file.name);
 }
 
+// Each provider's key is checked by reading its model list through the local
+// backend, and the chosen model must be in that list. No prompt or log is sent,
+// and no model is chosen here.
 async function testAllApis() {
-  const apis = [
-    { name: 'Groq', key: groqApiKeyInput.value.trim(), url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile' },
-    { name: 'DeepSeek', key: deepseekApiKeyInput.value.trim(), url: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-chat' },
-    { name: 'Together AI', key: togetherApiKeyInput.value.trim(), url: 'https://api.together.xyz/v1/chat/completions', model: 'Qwen/Qwen2.5-72B-Instruct-Turbo' },
-    // Checked with OpenRouter's key endpoint, so no model has to be chosen first.
-    { name: 'OpenRouter', key: openrouterApiKeyInput.value.trim(), url: 'https://openrouter.ai/api/v1/key' },
-    { name: 'Gemini', key: geminiApiKeyInput.value.trim(), url: 'gemini', model: 'gemini-2.5-flash' },
-    { name: 'Claude', key: claudeApiKeyInput.value.trim(), url: 'https://api.anthropic.com/v1/messages', model: 'claude-sonnet-4-6' }
-  ];
-
   testApisBtn.disabled = true;
   testApisBtn.textContent = '⏳ Testing...';
-  
-  let results = '<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">';
-  
-  for (const api of apis) {
-    if (!api.key) {
-      results += formatApiResult(api.name, 'No key', 'skip');
-      continue;
-    }
-    
+  const rows = [];
+  for (const [provider, name] of Object.entries(VeiluxProviderModels.PROVIDERS)) {
+    const key = providerKeyInputs[provider].value.trim();
+    if (!key) { rows.push(formatApiResult(name, 'No key', 'skip')); continue; }
     try {
-      let response;
-      if (api.name === 'Gemini') {
-        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${api.key}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: 'Test' }] }], generationConfig: { maxOutputTokens: 5 } })
-        });
-      } else if (api.name === 'Claude') {
-        response = await fetch(api.url, {
-          method: 'POST',
-          headers: { 'x-api-key': api.key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: api.model, messages: [{ role: 'user', content: 'Test' }], max_tokens: 5 })
-        });
-      } else {
-        const headers = { 'Authorization': `Bearer ${api.key}`, 'Content-Type': 'application/json' };
-        response = api.name === 'OpenRouter' ? await fetch(api.url, { headers }) : await fetch(api.url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ model: api.model, messages: [{ role: 'user', content: 'Test' }], max_tokens: 5 })
-        });
-      }
-      
-      results += formatApiResult(api.name, response.ok ? '✓ OK' : `✗ ${response.status}`, response.ok ? 'success' : 'error');
+      const models = await VeiluxProviderModels.list(provider, key);
+      const chosen = await VeiluxProviderModels.current(provider);
+      if (!chosen) rows.push(formatApiResult(name, '⚠ Key works · ' + models.length + ' models · choose a model', 'skip'));
+      else if (models.some(m => m.id === chosen.id)) rows.push(formatApiResult(name, '✓ OK · ' + chosen.id, 'success'));
+      else rows.push(formatApiResult(name, '✗ Key works, but ' + chosen.id + ' is not available. Choose another model.', 'error'));
     } catch (e) {
-      results += formatApiResult(api.name, '✗ Failed', 'error');
+      rows.push(formatApiResult(name, '✗ ' + VeiluxProviderModels.failureText(e), 'error'));
     }
   }
-  
-  results += '</div>';
-  setHTML(apiTestResults, results);
+  // OpenRouter: its key endpoint, so no model has to be chosen first.
+  const openrouterKey = openrouterApiKeyInput.value.trim();
+  if (!openrouterKey) rows.splice(3, 0, formatApiResult('OpenRouter', 'No key', 'skip'));
+  else {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/key', { headers: { 'Authorization': 'Bearer ' + openrouterKey } });
+      rows.splice(3, 0, formatApiResult('OpenRouter', response.ok ? '✓ OK' : '✗ ' + response.status, response.ok ? 'success' : 'error'));
+    } catch (e) {
+      rows.splice(3, 0, formatApiResult('OpenRouter', '✗ Failed', 'error'));
+    }
+  }
+  setHTML(apiTestResults, '<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">' + rows.join('') + '</div>');
   testApisBtn.disabled = false;
   testApisBtn.textContent = '🧪 Test All APIs';
 }
 
 function formatApiResult(name, msg, status) {
   const colors = { success: 'var(--success)', error: 'var(--danger)', skip: 'var(--muted)' };
-  return `<div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--inset);border-radius:4px;border-left:3px solid ${colors[status]}"><strong>${name}</strong><span>${msg}</span></div>`;
+  // The message can contain a provider's own error text.
+  return `<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 12px;background:var(--inset);border-radius:4px;border-left:3px solid ${colors[status]}"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(msg)}</span></div>`;
 }
 
 async function testSanitization() {
