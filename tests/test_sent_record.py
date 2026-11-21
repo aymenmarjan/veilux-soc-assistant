@@ -15,7 +15,7 @@ def run(handler, **body):
         return REAL_CLIENT(*args, transport=httpx.MockTransport(handler), **kwargs)
     with patch.object(server.httpx, "AsyncClient", client), patch.object(server, "training_data", {"feedback_entries": []}), \
             patch.object(server, "threat_intel_cache", {}), patch.object(server, "_save_threat_intel_cache", lambda: None):
-        return TestClient(server.app, client=("127.0.0.1", 50000), headers={"X-Veilux-Token": server.ACCESS_TOKEN}).post("/analyze", json={"logs": [LOG], "mode": "groq", "api_key": "synthetic-key", **body})
+        return TestClient(server.app, client=("127.0.0.1", 50000), headers={"X-Veilux-Token": server.ACCESS_TOKEN}).post("/analyze", json={"logs": [LOG], "mode": "groq", "api_key": "synthetic-key", "model": "llama-3.3-70b-versatile", **body})
 
 
 def test_ai_prompt_in_the_record_is_exactly_what_the_provider_received():

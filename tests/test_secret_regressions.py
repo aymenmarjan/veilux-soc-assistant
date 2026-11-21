@@ -201,6 +201,7 @@ class WorkflowRegressionTests(unittest.IsolatedAsyncioTestCase):
                     logs=[text],
                     mode="groq",
                     api_key="synthetic-key",
+                    model="synthetic-chosen-model",
                     sanitize=False,
                     secret_protection=config,
                     enable_threat_intel=True,

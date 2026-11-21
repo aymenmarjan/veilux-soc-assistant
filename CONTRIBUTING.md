@@ -41,7 +41,13 @@ cd tools/browser-check && npm ci && npm run check   # Firefox add-on lint, web A
 ```
 
 UI tests open the real popup and Settings pages with a simulated extension
-API, and every external service is mocked. `VEILUX_TEST_ENGINE=firefox` runs them
+API, and every external service is mocked. The Node module and platform-template
+tests need Node.js 18 or later on the PATH.
+
+Every local test server listens on a loopback port the system chooses, so the
+suite also runs where ports are reserved (Windows can exclude ranges such as
+9367-9466). Tests read the backend's output as UTF-8, as it writes it, whatever
+the system's code page. `VEILUX_TEST_ENGINE=firefox` runs them
 in Firefox's engine; see [docs/BROWSER_TESTING.md](docs/BROWSER_TESTING.md).
 A change should come with a test that fails without it.
 

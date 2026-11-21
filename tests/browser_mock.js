@@ -4,7 +4,7 @@
  try { window.localStorage; } catch (_) { return; }
  const listeners=[]; const messages=[]; const pending=[];
  const values=JSON.parse(localStorage.getItem('testStorage') || '{}');
- if (!values.capturedLogs) Object.assign(values,{capturedLogs:['password=synthetic-initial'],groqApiKey:'synthetic-api',virustotalApiKey:'synthetic-ti',enablePatternSanitization:false,
+ if (!values.capturedLogs) Object.assign(values,{capturedLogs:['password=synthetic-initial'],groqApiKey:'synthetic-api',providerModels:{groq:{id:'llama-3.3-70b-versatile',name:'llama-3.3-70b-versatile'}},virustotalApiKey:'synthetic-ti',enablePatternSanitization:false,
   backendToken:'veilux-test-backend-key-0123456789'});  // tests/backend_key.py
  function area(data, persistent) {
   return {

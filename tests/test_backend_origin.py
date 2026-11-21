@@ -4,10 +4,12 @@ Web pages are refused by origin and host checks. Other browser extensions, and
 other programs, are refused because every request needs the backend key, which
 only the paired extension holds."""
 import os
+import re
 import socket
 import stat
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -274,13 +276,38 @@ def test_loopback_detection():
         assert not server.is_loopback_address(host), host
 
 
-def _start(tmp_path, *args, token=None):
+def _start(tmp_path, *args, token=None, binary=False):
     env = {k: v for k, v in os.environ.items() if not k.startswith("VEILUX_")}
     env["VEILUX_KEY_FILE"] = str(tmp_path / "veilux_backend.key")
     if token is not None:
         env["VEILUX_TOKEN"] = token
-    return subprocess.Popen([sys.executable, "server.py", *args], cwd=ROOT, env=env,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    # The backend writes UTF-8 (it reconfigures its output at start-up, for the
+    # emoji in its messages). Decode it as UTF-8: text=True alone would use the
+    # locale code page, cp1252 on most Windows computers, which cannot decode
+    # every byte the emoji use; communicate() then silently returns None.
+    text = {} if binary else {"encoding": "utf-8"}
+    return subprocess.Popen([sys.executable, "server.py", *args], cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, **text)
+
+
+class _Output:
+    """Reads one of a running backend's pipes line by line, as it is written."""
+    def __init__(self, pipe):
+        self.lines, self.undecodable = [], []
+        self.thread = threading.Thread(target=self._read, args=(pipe,), daemon=True)
+        self.thread.start()
+
+    def _read(self, pipe):
+        for raw in iter(pipe.readline, b""):
+            try:
+                self.lines.append(raw.decode("utf-8"))
+            except UnicodeDecodeError:
+                self.undecodable.append(repr(raw))
+                self.lines.append(raw.decode("utf-8", "replace"))
+
+    @property
+    def text(self):
+        return "".join(self.lines)
 
 
 def test_backend_refuses_a_short_veilux_token(tmp_path):
@@ -296,22 +323,39 @@ def test_backend_creates_its_key_and_shows_a_pairing_code(tmp_path):
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
-    process = _start(tmp_path, "--port", str(port))
+    process = _start(tmp_path, "--port", str(port), binary=True)
+    out, err = _Output(process.stdout), _Output(process.stderr)
     base = f"http://127.0.0.1:{port}"
     try:
+        # The code is shown while the backend starts (written at once, not
+        # held in a buffer until it stops), and it is a working pairing code.
+        deadline = time.monotonic() + 60
+        while "Pairing code:" not in out.text:
+            assert process.poll() is None, f"backend exited with {process.returncode}:\n{out.text}{err.text}"
+            assert time.monotonic() < deadline, f"no pairing code after 60 s:\n{out.text}{err.text}"
+            time.sleep(0.1)
+        code = re.search(r"Pairing code: ([A-Z0-9]{4}-[A-Z0-9]{4})", out.text).group(1)
         for _ in range(100):
             try:
                 assert httpx.get(base + "/health", timeout=1, trust_env=False).json()["status"] == "healthy"
                 break
             except httpx.TransportError:
-                assert process.poll() is None, process.communicate()
+                assert process.poll() is None, f"{out.text}{err.text}"
                 time.sleep(0.2)
         else:
             raise AssertionError("backend did not start")
         key = (tmp_path / "veilux_backend.key").read_text().strip()
         assert httpx.get(base + "/lessons", timeout=2, trust_env=False).status_code == 401
         assert httpx.get(base + "/lessons", headers={"X-Veilux-Token": key}, timeout=2, trust_env=False).status_code == 200
+        paired = httpx.post(base + "/pair", json={"code": code}, timeout=2, trust_env=False)
+        assert paired.status_code == 200 and paired.json()["token"] == key
     finally:
         process.terminate()
-        out, _ = process.communicate(timeout=10)
-    assert "Pairing code:" in out and key not in out
+        process.wait(timeout=10)
+        out.thread.join(10)
+        err.thread.join(10)
+    # Neither output ever shows the key itself; both are valid UTF-8; the key
+    # file's location (not its content) is shown.
+    assert key not in out.text and key not in err.text
+    assert out.undecodable == [] and err.undecodable == []
+    assert "Backend key: " + str(tmp_path / "veilux_backend.key") in out.text

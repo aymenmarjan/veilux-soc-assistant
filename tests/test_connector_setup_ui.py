@@ -398,7 +398,7 @@ class ConnectorSetupTests(unittest.TestCase):
         self.page.locator('#defang-toggle').click()
         self.page.locator('#defang-input').fill('http://evil.example/x')
         self.page.locator('#defang-btn').click()
-        expect(self.page.locator('#defang-output')).to_have_value(re.compile('hXXp'))
+        expect(self.page.locator('#defang-output')).to_have_value('hxxp://evil[.]example/x')
         self.assertEqual([self.url+'/defang'],requests)
 
     def test_pairing_with_the_backend_code_stores_the_key_and_signs_requests(self):
@@ -447,7 +447,7 @@ class ConnectorSetupTests(unittest.TestCase):
         self.page.locator('#defang-toggle').click()
         self.page.locator('#defang-input').fill('http://evil.example/x')
         self.page.locator('#defang-btn').click()
-        expect(self.page.locator('#defang-output')).to_have_value(re.compile('hXXp'))
+        expect(self.page.locator('#defang-output')).to_have_value('hxxp://evil[.]example/x')
         self.assertEqual([TEST_BACKEND_KEY],sent)
 
     def test_blank_typed_query_parameter_survives_job_edit(self):

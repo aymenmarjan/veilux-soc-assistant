@@ -28,9 +28,27 @@ class BackgroundExtractionTests(unittest.TestCase):
         self.page.evaluate('data => browser.storage.local.set(data)', {'connectorProfiles': profiles, **storage})
         self.page.goto(self.url + '/extension/popup.html')
         self.tab('https://console.test/events')
+        self.wait_until_ready()
+
+    def wait_until_ready(self):
+        # popup.js marks the end of its start-up (logs, preferences, stage).
+        expect(self.page.locator('body')).to_have_attribute('data-ready', 'true', timeout=30000)
+
+    def reload_popup(self):
+        self.page.reload()
+        self.wait_until_ready()
 
     def stored(self, key):
         return self.page.evaluate('(key) => browser.storage.local.get(key)', key).get(key)
+
+    def wait_for_captured(self, count, sample_size=None):
+        """The popup loads captured logs and its saved preferences after the page
+        opens. Statistics from captured logs read both when Extract statistics is
+        pressed, so wait until they are shown (on a busy machine this can take a
+        moment) instead of pressing it before they are there."""
+        expect(self.page.locator('#log-count')).to_have_text(f'{count} log' + ('' if count == 1 else 's'), timeout=15000)
+        if sample_size is not None:
+            expect(self.page.locator('#statistics-sample-size')).to_have_value(str(sample_size), timeout=15000)
 
     def test_statistics_use_the_chosen_sample_size(self):
         self.popup([api_profile(path='/records')])
@@ -44,13 +62,14 @@ class BackgroundExtractionTests(unittest.TestCase):
         self.assertTrue(self.stored('fieldStatistics')[0]['limited'])
         sent = [r['url'] for r in self.page.request.get(self.url + '/test/sent').json() if 'records.test' in r['url']]
         self.assertEqual(['https://records.test/records'], sent)
-        self.page.reload()
+        self.reload_popup()
         expect(self.page.locator('#statistics-sample-size')).to_have_value('1')
 
     def test_captured_logs_statistics_respect_the_sample_size(self):
         logs = [json.dumps({'user': name}) for name in ('alice', 'bob', 'carol')]
         profile = api_profile(path='/records'); profile['statistics'] = {'mode': 'captured'}
         self.popup([profile], capturedLogs=logs, popupPreferences={'statisticsSampleSize': 2})
+        self.wait_for_captured(3, sample_size=2)
         self.page.locator('#extract-stats-btn').click()
         expect(self.page.locator('#statistics-list')).to_contain_text('alice', timeout=10000)
         stat = self.stored('fieldStatistics')[0]
@@ -61,14 +80,18 @@ class BackgroundExtractionTests(unittest.TestCase):
         logs = [json.dumps({'user': name}) for name in ('a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'b1', 'b2', 'b3')]
         profile = api_profile(path='/records'); profile['statistics'] = {'mode': 'captured'}
         self.popup([profile], capturedLogs=logs)
+        self.wait_for_captured(12)
         top = self.page.locator('#statistics-top-values')
         expect(top).to_have_value('5')
+        # The control is under the Case stage's Statistics tab, as for an analyst.
+        self.page.locator('#statistics-toggle').click()
+        expect(top).to_be_visible()
         top.fill('10')
         top.dispatch_event('change')
         self.page.locator('#extract-stats-btn').click()
         expect(self.page.locator('#statistics-list')).to_contain_text('a1', timeout=10000)
         self.assertEqual(10, len(self.stored('fieldStatistics')[0]['fields'][0]['topValues']))
-        self.page.reload()
+        self.reload_popup()
         expect(self.page.locator('#statistics-top-values')).to_have_value('10')
 
     def test_statistics_skip_records_that_cannot_be_read(self):
@@ -112,7 +135,8 @@ class BackgroundExtractionTests(unittest.TestCase):
         self.popup([api_profile()], extractionResult=result)
         expect(self.page.locator('#logs-textarea')).to_have_value(re.compile('finished-while-closed'), timeout=10000)
         self.assertIsNone(self.stored('extractionResult'))
-        self.page.reload()
+        # After start-up has fully finished, so a late second copy would be seen.
+        self.reload_popup()
         expect(self.page.locator('#logs-textarea')).to_have_value(re.compile('finished-while-closed'))
         self.assertEqual(1, self.page.locator('#logs-textarea').input_value().count('finished-while-closed'))
 

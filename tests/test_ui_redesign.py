@@ -39,7 +39,9 @@ class InterfaceUITests(unittest.TestCase):
 
     def test_provider_modes_keep_request_contract_and_preferences(self):
         names = ['groq', 'deepseek', 'together', 'openrouter', 'gemini', 'claude']
+        builtin = ['groq', 'deepseek', 'together', 'gemini', 'claude']
         self.store({**{name + 'ApiKey': 'synthetic-' + name for name in names}, 'openrouterModel': 'vendor/alpha:free',
+                    'providerModels': {name: {'id': 'synthetic-' + name + '-model'} for name in builtin},
                     'customAiProviders': [{'id':'local', 'name':'Synthetic local model',
                         'endpoint':'http://model.test/v1/chat/completions',
                         'model':'synthetic-model', 'apiFormat':'openai', 'apiKey':'synthetic-custom'}]})
@@ -61,6 +63,8 @@ class InterfaceUITests(unittest.TestCase):
                 if name.startswith('custom:'):
                     self.assertEqual('synthetic-model', request['custom_provider']['model'])
                 self.assertEqual('vendor/alpha:free' if name == 'openrouter' else None, request.get('openrouter_model'))
+                # Built-in providers send the model chosen in Settings, and only theirs.
+                self.assertEqual('synthetic-' + name + '-model' if name in builtin else None, request.get('model'))
         self.page.locator('input[value="sanitize_only"]').check()
         expect(self.page.locator('#provider-controls')).to_be_hidden()
         expect(self.page.locator('#ti-toggle-container')).to_be_hidden()
@@ -351,9 +355,15 @@ class InterfaceUITests(unittest.TestCase):
         self.context.route(re.compile(r'^https://'), provider_reply)
         for provider in ('groq','deepseek','together','openrouter','gemini','claude'):
             self.page.locator('#' + provider + '-api-key').fill('synthetic-key')
+        # Keys are checked through each provider's model list (via the backend);
+        # only OpenRouter's key endpoint is called from the browser. No prompt is sent.
+        listed = self.mock_json('providers/*/models', {'models': [{'id': 'synthetic-model', 'name': 'Synthetic model'}]})
         self.page.locator('#test-apis-btn').click()
         expect(self.page.locator('#api-test-results')).to_contain_text('Claude',timeout=15000)
-        self.assertEqual(6,len(calls))
+        self.assertEqual(['https://openrouter.ai/api/v1/key'], calls)
+        self.assertEqual(5, len(listed))
+        self.assertTrue(all(body == {'api_key': 'synthetic-key'} for body in listed), listed)
+        expect(self.page.locator('#api-test-results')).to_contain_text('choose a model')
         self.mock_json('threat-intel/lookup', {'verdict':'clean', 'sources':{'virustotal':{'status':'ok'}}})
         self.page.locator('#test-threat-intel-btn').click()
         expect(self.page.locator('#threat-intel-test-result')).to_contain_text('Lookup completed')
@@ -399,9 +409,9 @@ class InterfaceUITests(unittest.TestCase):
         self.page.locator('#defang-toggle').click()
         self.page.locator('#defang-input').fill('https://example.test/1')
         self.page.locator('#defang-btn').click()
-        expect(self.page.locator('#defang-output')).to_have_value('hXXps://example.test/1')
+        expect(self.page.locator('#defang-output')).to_have_value('hxxps://example[.]test/1')
         self.page.locator('#copy-defang-btn').click()
-        self.assertEqual('hXXps://example.test/1',self.page.evaluate('window.copied'))
+        self.assertEqual('hxxps://example[.]test/1',self.page.evaluate('window.copied'))
         self.page.locator('#defang-input').fill('hxxps://example[.]test/1')
         self.page.locator('#refang-btn').click()
         expect(self.page.locator('#defang-output')).to_have_value('https://example.test/1')

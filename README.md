@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-0C7AA6?style=for-the-badge"/>
+  <img alt="Version 1.0.1" src="https://img.shields.io/badge/version-1.0.1-0C7AA6?style=for-the-badge"/>
   <img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-0B1220?style=for-the-badge"/>
   <img alt="Python 3.12+ when run from source" src="https://img.shields.io/badge/python-3.12%2B-0C7AA6?style=for-the-badge&logo=python&logoColor=white"/>
   <img alt="Manifest V3" src="https://img.shields.io/badge/extension-Manifest%20V3-0B1220?style=for-the-badge"/>
@@ -93,12 +93,12 @@ When a version is published, its packages are attached to this repository's **Re
 
 | Package | For |
 |---|---|
-| `veilux-1.0.0-chromium.zip` | Chrome, Edge, Brave, Opera, Vivaldi |
-| `veilux-1.0.0-firefox.xpi` | Firefox 140+ |
-| `veilux-backend-1.0.0-windows-x64.zip` | Windows 10/11 x64 |
-| `veilux-backend-1.0.0-linux-x64.tar.gz` | Linux x64, glibc 2.35+ |
-| `veilux-backend-1.0.0-macos-x64.tar.gz` | macOS, Intel |
-| `veilux-backend-1.0.0-macos-arm64.tar.gz` | macOS, Apple silicon |
+| `veilux-1.0.1-chromium.zip` | Chrome, Edge, Brave, Opera, Vivaldi |
+| `veilux-1.0.1-firefox.xpi` | Firefox 140+ |
+| `veilux-backend-1.0.1-windows-x64.zip` | Windows 10/11 x64 |
+| `veilux-backend-1.0.1-linux-x64.tar.gz` | Linux x64, glibc 2.35+ |
+| `veilux-backend-1.0.1-macos-x64.tar.gz` | macOS, Intel |
+| `veilux-backend-1.0.1-macos-arm64.tar.gz` | macOS, Apple silicon |
 | `SHA256SUMS.txt` | Checksums of every file |
 
 Verify a download against `SHA256SUMS.txt` before running it.
@@ -224,6 +224,8 @@ Reports and answers always need an AI provider, even when the case is set to san
 
 <p align="center"><img alt="The four popup stages: Case, Options, Results and Tools" src="docs/images/readme/tour.png" width="100%"/></p>
 
+**Several pasted logs**: separate them with a `---LOG SEPARATOR---` line (or press **Insert log separator** under the log box). The log count, statistics and the analysis then treat each part as its own log.
+
 **A popup that shows one thing at a time**: a rail under the header switches between **Case** (logs, statistics and case notes as tabs), **Options** (what to run and what is sent), **Results** (Analysis, Ask and Report, with details such as sanitized inputs, changes, threat intel and the sent record one row below) and **Tools** (indicator check, defang). Each stage shows a one-line summary in the rail. A credential review takes over as its own stage until you answer it, and finished work opens Results by itself.
 
 <p align="center"><img alt="Result details: sanitized inputs, changes, threat intel and the sent record" src="docs/images/readme/details.png" width="100%"/></p>
@@ -311,7 +313,7 @@ Token, password, app sign-in and named-cookie connections, search jobs and conte
 - **Case notes: one memory for the whole case**: your own text plus answers kept from Ask, sent with every analysis, question and report and protected like the logs. See [how the three actions feed each other](#how-the-three-feed-each-other).
 - **Case names and private notes**: the case's ⋯ menu gives it an optional name, shown next to its number, and a private notes field for ticket links or to-dos. Private notes stay on this computer and are never sent, unlike Case notes, which every AI request receives.
 - **Case indicators**: Tools → **Case indicators** lists every IP, domain, URL, hash, email, user, host and SID found in the case's logs, with counts and a type filter. Check all of them, or the selected ones, with threat intelligence (only public IPs, domains, URLs and hashes are sent; results join the case's threat intelligence, so the Threat intel tab, Ask and reports use them), copy them defanged, or export them as CSV.
-- **Defang/refang** helpers for sharing IOCs safely.
+- **Defang/refang** helpers for sharing IOCs safely: `https://www.google.com/` becomes `hxxps://www[.]google[.]com/`, IPs become `203[.]0[.]113[.]45`, e-mails `admin[@]example[.]com`; paths, file names such as `cmd.exe` and the original evidence are left unchanged, and refang restores the exact original.
 
 <table>
 <tr>
@@ -323,6 +325,7 @@ Token, password, app sign-in and named-cookie connections, search jobs and conte
 ### 🤖 AI
 
 - **Multi-provider AI analysis**: Groq, DeepSeek, Together AI, OpenRouter, Gemini, Claude. Pick per-request.
+- **Choose the model yourself**: VEILUX has no built-in model IDs, because providers retire them. In Settings → Providers and API keys, **Load models** lists the models your key can use right now (only the key is sent, never logs); pick one, or enter a model ID. If the provider later retires it, the analysis stops with a clear message instead of switching to another model. **Test All APIs** checks each key and the chosen model the same way, without sending a prompt.
 - **OpenRouter free models**: in Settings → AI models, or under the provider in the popup, choose **Find free models** to see the models OpenRouter offers for free right now (context window, longest answer, input types, reasoning, tool use, availability date and description), then **Use this model**. Any other OpenRouter model ID can be entered too.
 - **Add your own model** in Settings → AI models → Your AI models: services speaking the OpenAI-compatible Chat Completions, Anthropic Messages, or Gemini GenerateContent API shape, including local runners such as Ollama and LM Studio. Choose a service, enter its exact model ID and key, then **Test connection** and **Save model**. Connection tests and analysis use the same configuration. See [your own AI models](docs/CUSTOM_MODELS.md).
 - **Ask: follow-up questions per case**: an **Ask** tab next to Analysis and Report holds a short conversation about the open case, no analysis needed first. Each question resends the whole case plus the last 8 exchanges through the same protection, in one request, so markers stay consistent. Choose a model per question, start from quick questions (edited in Settings → Prompts), keep useful answers with **Add to case notes**, and clear the conversation with **Start over**.
@@ -496,8 +499,8 @@ Extract the archive, then in Terminal, in the extracted folder:
 <td valign="top">
 
 ```bash
-tar -xzf veilux-backend-1.0.0-linux-x64.tar.gz
-./veilux-backend-1.0.0-linux-x64/veilux-backend
+tar -xzf veilux-backend-1.0.1-linux-x64.tar.gz
+./veilux-backend-1.0.1-linux-x64/veilux-backend
 ```
 
 </td>
@@ -579,7 +582,7 @@ Use the package from a release, or the `extension/` folder of a clone. Steps dif
 
 #### Chromium browsers
 
-From a release, extract `veilux-1.0.0-chromium.zip` first and select the extracted folder in step 3; from a clone, select the `veilux-soc-assistant/extension` folder.
+From a release, extract `veilux-1.0.1-chromium.zip` first and select the extracted folder in step 3; from a clone, select the `veilux-soc-assistant/extension` folder.
 
 | Browser | 1. Go to | 2. Turn on **Developer mode** | 3. Then |
 |---|---|---|---|
@@ -597,7 +600,7 @@ Chromium-based browsers need version 121 or later. Always load the extension fro
 
 1. Go to `about:debugging#/runtime/this-firefox`.
 2. Click **Load Temporary Add-on…**.
-3. Select `veilux-1.0.0-firefox.xpi`, or any file inside `veilux-soc-assistant/extension` (e.g. `manifest.json`).
+3. Select `veilux-1.0.1-firefox.xpi`, or any file inside `veilux-soc-assistant/extension` (e.g. `manifest.json`).
 4. The extension is active until Firefox is closed; you'll need to repeat this each restart.
 
 **Permanent install** (persists across restarts). Firefox installs extensions permanently only when Mozilla has signed them, even for internal/private use:
@@ -644,7 +647,7 @@ Click the extension icon → **Settings**. The sidebar groups everything by purp
 
 | Section | What to set |
 |---|---|
-| **AI → Providers and keys** | Paste the key for whichever provider(s) you plan to use. Only the provider selected for an analysis needs a key. **Your models** adds any OpenAI-compatible, Claude or Gemini API ([guide](docs/CUSTOM_MODELS.md)). |
+| **AI → Providers and keys** | Paste the key for whichever provider(s) you plan to use, then **Load models** and choose a model for each built-in provider. Only the provider selected for an analysis needs a key. **Your models** adds any OpenAI-compatible, Claude or Gemini API ([guide](docs/CUSTOM_MODELS.md)). |
 | **Sources → Connections** | See [step 5](#5-configure-your-connections) below. |
 | **Protection → Privacy masking** | Auto-detects IPs, users, hosts, domains and emails, plus JSON keys and keywords you list (for example a project codename). |
 | **Protection → Custom rules** | Your own regular expressions and field exclusions in one list. |
@@ -815,7 +818,7 @@ veilux-soc-assistant/
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). This is version 1.0.0, the first public release.
+See [CHANGELOG.md](CHANGELOG.md). This is version 1.0.1; 1.0.0 was the first public release.
 
 ## Security
 

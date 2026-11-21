@@ -3,6 +3,71 @@
 All notable changes to VEILUX are listed here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.0.1
+
+### Fixed
+
+* **AI models are no longer built in.** A fixed model ID stops working when a
+  provider retires it (Groq: "The model llama-3.3-70b-versatile does not exist
+  or you do not have access to it"). Groq, DeepSeek, Together AI, Gemini and
+  Claude now use the model chosen in Settings → Providers and API keys:
+  **Load models** reads the provider's own model list with the API key only
+  (no logs, notes or prompts), and a model ID can also be typed. An analysis
+  without a chosen model stops before anything is sent. A model the provider
+  no longer offers, a refused key and rate limits get their own clear
+  messages, and VEILUX never switches to another model by itself.
+  **Test All APIs** checks each key and the chosen model through the model
+  list instead of sending a prompt (the Gemini key is no longer put in the
+  address). Custom models get **Load models** for OpenAI-compatible (including
+  Ollama and LM Studio), Claude and Gemini URLs. OpenRouter is unchanged.
+* **Defanging URLs with host names.** `https://www.google.com/` now becomes
+  `hxxps://www[.]google[.]com/`, like IP addresses already did. The scheme
+  keeps its letter case (`hxxp`, `HXXP`), every dot in a URL's host, e-mail
+  domains and bare domain names (with a real public suffix) is bracketed, and
+  paths, query strings and file names such as `cmd.exe` are left alone.
+  Defanging twice changes nothing; refang restores the exact original and
+  still reads the `hXXp` form of 1.0.0. The popup's offline fallback uses the
+  same scheme form.
+* **Pasted logs with `---LOG SEPARATOR---` counted as one log.** Typing or
+  pasting into the log box now splits on the separator exactly as the
+  analysis request does, so the log count, the case summary, statistics from
+  captured logs and indicators see the same separate logs the AI receives.
+  Text without a separator is kept exactly as typed. A new **Insert log
+  separator** button under the log box adds a separator at the cursor.
+  Extracted SIEM/SOAR logs are unchanged.
+
+### Tests
+
+* The suite runs on Windows as on Linux and macOS: the data-folder test no
+  longer simulates another system by patching `sys.platform` (the folder for
+  each system is computed by `data_dir_for`, the same on any computer); the
+  backend's output is read as UTF-8 instead of the Windows code page; the mock
+  SIEM listens on a port the system chooses instead of 9401; and the statistics
+  UI tests wait until the popup has finished starting (`data-ready`) instead of
+  racing it.
+
+### Security
+
+* Connector requests can no longer be moved by data read while working. Values
+  from pages, search IDs and context fields from API responses always fill one
+  encoded path segment, a value of `.` or `..` stops the request, and every
+  built address is checked to stay on the configured API address and its path.
+  The legacy single-record mode now builds addresses the same way.
+* The API address, the app sign-in token address and custom model addresses
+  are checked: `http://` or `https://` only, no user name or password in a
+  connector's API address, and link-local or cloud instance-metadata addresses
+  (such as `169.254.169.254`, including its decimal and hexadecimal spellings)
+  are refused. Private and local addresses keep working. Redirects are never
+  followed.
+* Link patterns are matched with a time limit, so a pattern with nested
+  repetition cannot freeze the backend on a crafted link; patterns, links and
+  the number of links per request are capped.
+* Error responses no longer include unexpected exception text; it stays in
+  the backend window.
+* The in-memory app sign-in token cache is keyed with an HMAC under a random
+  per-start key instead of a plain SHA-256 of the client secret.
+* Threat-intelligence lookups encode the indicator as one path segment.
+
 ## 1.0.0 — first public release
 
 * Browser extension for Chrome, Edge, Brave, Opera, Vivaldi (121+) and

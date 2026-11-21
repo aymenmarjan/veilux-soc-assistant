@@ -61,12 +61,19 @@ pages, or rows a virtual list has not rendered, are not included.
 - **API address** is filled from the website address. Change it only when the
   API is on another host, port or path prefix (Splunk's management port 8089,
   or an Elasticsearch cluster on port 9200, for example).
+  Private and local addresses work (`https://10.0.0.5`, `http://siem.corp.local:9200`,
+  `http://localhost:55000`). The address must start with `http://` or `https://` and
+  must not contain a user name, password, `?` or `#`. Link-local and cloud
+  instance-metadata addresses (such as `169.254.169.254`) are refused.
 - **How the API answers**: most APIs return the records directly. Search-job
   APIs start a search, report its status, then return results; the three steps
   have their own fields.
 - **Path, URL query parameters and body**: write `${name}` wherever a value from
   the page belongs, for example `/api/events/${event_id}`, and `${query}` for the
-  search below.
+  search below. A value in the path always fills exactly one path segment: `/`,
+  `?`, `#` and `@` in it are encoded, and a value of `.` or `..` (or one that
+  contains them between slashes) stops the request. Requests never leave the API
+  address, and redirects are not followed.
 - **Default search** fills `${query}` when the page gives no values.
 - **Where are the records in the JSON?** Give the dot path to the list of
   records, such as `data.events`. Not sure? Open **Find it from a sample**,

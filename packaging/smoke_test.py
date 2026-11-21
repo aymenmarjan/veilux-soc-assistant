@@ -30,6 +30,10 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
+
+# The version being released, as server.py states it.
+VERSION = re.search(r'^VERSION = "([^"]+)"', (Path(__file__).resolve().parents[1] / "server.py").read_text(encoding="utf-8"), re.M).group(1)
 
 WINDOWS = os.name == "nt"
 SAMPLE = json.dumps({"user": "j.doe", "src_ip": "10.20.30.40", "dst_ip": "198.51.100.23",
@@ -112,7 +116,7 @@ def check(label, condition, detail=""):
 
 def main(command):
     version = subprocess.run([*command, "--version"], capture_output=True, text=True, timeout=120)
-    check("--version", version.returncode == 0 and "VEILUX backend 1.0.0" in version.stdout, version.stdout + version.stderr)
+    check("--version", version.returncode == 0 and "VEILUX backend " + VERSION in version.stdout, version.stdout + version.stderr)
     with tempfile.TemporaryDirectory(prefix="veilux-smoke-") as root:
         data_dir = os.path.join(root, "VEILUX")          # the backend creates it
         port = free_port()
@@ -121,7 +125,7 @@ def main(command):
             code = backend.wait_for(r"Pairing code: ([A-Z0-9]{4}-[A-Z0-9]{4})", 120).group(1)
             check("start-up shows a pairing code and the data folder", "Data folder: " + data_dir in backend.output)
             status, health = request(port, "/health")
-            check("/health answers without the key", status == 200 and health.get("version") == "1.0.0", str(health))
+            check("/health answers without the key", status == 200 and health.get("version") == VERSION, str(health))
             check("other requests need the key", request(port, "/lessons")[0] == 401)
             status, wrong = request(port, "/pair", {"code": "AAAA-AAAA" if code != "AAAA-AAAA" else "BBBB-BBBB"})
             check("a wrong pairing code is refused", status == 401, str(wrong))
@@ -144,8 +148,9 @@ def main(command):
             status, found = request(port, "/indicators", {"logs": [SAMPLE]}, key)
             values = {item.get("value") for item in (found or {}).get("indicators", [])}
             check("indicators are listed", status == 200 and "198.51.100.23" in values, str(values))
-            second = subprocess.run([*command, "--port", str(port)], capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL,
-                                    env={**os.environ, "VEILUX_DATA_DIR": data_dir})
+            # The backend writes UTF-8; the Windows code page would not decode all of it.
+            second = subprocess.run([*command, "--port", str(port)], capture_output=True, encoding="utf-8", errors="replace",
+                                    timeout=120, stdin=subprocess.DEVNULL, env={**os.environ, "VEILUX_DATA_DIR": data_dir})
             check("a second copy on the same port explains itself", second.returncode == 1 and "already in use" in second.stderr,
                   second.stdout + second.stderr)
         finally:

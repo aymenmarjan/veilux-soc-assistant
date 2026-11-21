@@ -11,6 +11,12 @@ a company gateway or a model running on your own computer.
 2. Choose **Model service**. This fills in the service's connection details.
 3. Give it a **Name in VEILUX**, paste the exact **Model ID** available to your
    account, and enter the **API key**. Local services can work without a key.
+   **Load models** next to Model ID asks the service for its model list and
+   offers the IDs as suggestions. It works when the Service URL ends in
+   `/chat/completions` (OpenAI-compatible, including Ollama and LM Studio),
+   `/messages` (Claude) or is a Gemini `/models/{model}` address; only the key and
+   any extra headers are sent, never logs. Azure OpenAI deployments have no such
+   list: enter the deployment's model ID yourself.
 4. Use **Test connection**, then **Save model**. The model appears in the popup's
    AI provider list. This editor saves independently of the general Save settings
    button.

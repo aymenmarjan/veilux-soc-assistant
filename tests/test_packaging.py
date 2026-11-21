@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ICONS = ROOT / "packaging" / "icons"
 sys.path.insert(0, str(ROOT / "packaging"))
 import build_backend  # noqa: E402
+VERSION = build_backend.version()
 
 
 def png_size(data):
@@ -70,8 +71,8 @@ def test_icons_are_regenerated_identically(tmp_path):
 
 def test_extension_packages_are_exactly_the_extension(tmp_path):
     subprocess.run([sys.executable, "packaging/build_extensions.py", str(tmp_path)], cwd=ROOT, check=True, capture_output=True)
-    result = subprocess.run([sys.executable, "packaging/check_package.py", str(tmp_path / "veilux-1.0.0-chromium.zip"),
-                             str(tmp_path / "veilux-1.0.0-firefox.xpi")], cwd=ROOT, capture_output=True, text=True)
+    result = subprocess.run([sys.executable, "packaging/check_package.py", str(tmp_path / f"veilux-{VERSION}-chromium.zip"),
+                             str(tmp_path / f"veilux-{VERSION}-firefox.xpi")], cwd=ROOT, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
 
 

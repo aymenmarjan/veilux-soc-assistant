@@ -719,7 +719,7 @@ class ExtensionUITests(unittest.TestCase):
                 'capturedLogs': [],
                 'connectorProfiles': [{'id': 'native-review', 'name': 'Synthetic SIEM', 'schemaVersion': 2, 'siemHost': '127.0.0.1',
                     'siemBaseUrl': self.url, 'discoverPathHint': 'native-source', 'dom': {'discover': {'strategy': 'table_scrape'}}}],
-                'groqApiKey': 'synthetic', 'enablePatternSanitization': False,
+                'groqApiKey': 'synthetic', 'providerModels': {'groq': {'id': 'llama-3.3-70b-versatile'}}, 'enablePatternSanitization': False,
             })
             with native.expect_page() as opened:
                 worker.evaluate('(url) => chrome.windows.create({url, type:"popup", width:780, height:800})',
@@ -822,7 +822,7 @@ class ExtensionUITests(unittest.TestCase):
                         await chrome.windows.update(tab.windowId, {focused:true});
                     }''', target)
                 worker.evaluate('(data) => chrome.storage.local.set(data)', {
-                    'capturedLogs': [], 'groqApiKey': 'synthetic', 'enablePatternSanitization': False,
+                    'capturedLogs': [], 'groqApiKey': 'synthetic', 'providerModels': {'groq': {'id': 'llama-3.3-70b-versatile'}}, 'enablePatternSanitization': False,
                     'connectorProfiles': [{'id': 'linked-review', 'name': 'Synthetic', 'schemaVersion': 2,
                         'websiteUrl': self.url, 'siemHost': '127.0.0.1', 'siemBaseUrl': self.url, 'verifySsl': False,
                         'maxRecords': 5000, 'statistics': {'mode': 'records'}, 'dom': {'discover': {'strategy': 'table_scrape'}},

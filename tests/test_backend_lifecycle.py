@@ -15,30 +15,51 @@ ROOT = Path(__file__).resolve().parents[1]
 posix_only = pytest.mark.skipif(os.name == "nt", reason="POSIX permissions")
 
 
-def test_data_folder_per_system(monkeypatch, tmp_path):
+def test_data_folder_per_system():
+    """Each system's folder, computed the same way on any computer: no
+    patching of sys.platform or os.name, whose effects differ by host."""
+    windows = server.data_dir_for("windows", {"LOCALAPPDATA": r"C:\Users\analyst\AppData\Local"}, r"C:\Users\analyst")
+    assert windows == r"C:\Users\analyst\AppData\Local\VEILUX"
+    assert server.data_dir_for("windows", {}, r"C:\Users\analyst") == r"C:\Users\analyst\AppData\Local\VEILUX"
+    assert server.data_dir_for("windows", {"LOCALAPPDATA": ""}, r"C:\Users\analyst") == r"C:\Users\analyst\AppData\Local\VEILUX"
+    assert server.data_dir_for("macos", {"XDG_DATA_HOME": "/ignored"}, "/Users/analyst") == "/Users/analyst/Library/Application Support/VEILUX"
+    assert server.data_dir_for("linux", {"XDG_DATA_HOME": "/home/analyst/xdg"}, "/home/analyst") == "/home/analyst/xdg/veilux"
+    assert server.data_dir_for("linux", {}, "/home/analyst") == "/home/analyst/.local/share/veilux"
+    assert server.data_dir_for("linux", {"XDG_DATA_HOME": ""}, "/home/analyst") == "/home/analyst/.local/share/veilux"
+
+
+def test_system_name():
+    assert server.system_name("nt", "win32") == "windows"
+    assert server.system_name("posix", "darwin") == "macos"
+    assert server.system_name("posix", "linux") == "linux"
+    assert server.system_name("posix", "freebsd14") == "linux"
+    assert server.system_name() == {"nt": "windows"}.get(os.name, "macos" if sys.platform == "darwin" else "linux")
+
+
+def test_data_folder_on_this_computer(monkeypatch, tmp_path):
     monkeypatch.delenv("VEILUX_DATA_DIR", raising=False)
     # Run from source: the folder the backend is started from, as before.
     monkeypatch.delattr(sys, "frozen", raising=False)
     assert server.default_data_dir() == ""
+    # Packaged: this computer's own folder, from its real environment.
     monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
-    monkeypatch.setattr(sys, "platform", "linux")
-    assert server.default_data_dir() == str(tmp_path / "xdg" / "veilux")
-    monkeypatch.delenv("XDG_DATA_HOME")
-    assert server.default_data_dir() == os.path.join(str(tmp_path), ".local", "share", "veilux")
-    monkeypatch.setattr(sys, "platform", "darwin")
-    assert server.default_data_dir() == os.path.join(str(tmp_path), "Library", "Application Support", "VEILUX")
+    assert server.default_data_dir() == server.data_dir_for(server.system_name(), os.environ, os.path.expanduser("~"))
+    # The variables each system really uses decide the folder.
+    if os.name == "nt":
+        monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
+        assert server.default_data_dir() == str(tmp_path / "Local" / "VEILUX")
+    elif sys.platform == "darwin":
+        monkeypatch.setenv("HOME", str(tmp_path))
+        assert server.default_data_dir() == str(tmp_path / "Library" / "Application Support" / "VEILUX")
+    else:
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+        assert server.default_data_dir() == str(tmp_path / "xdg" / "veilux")
+        monkeypatch.delenv("XDG_DATA_HOME")
+        assert server.default_data_dir() == str(tmp_path / ".local" / "share" / "veilux")
+    # VEILUX_DATA_DIR always wins.
     monkeypatch.setenv("VEILUX_DATA_DIR", str(tmp_path / "chosen"))
     assert server.default_data_dir() == str(tmp_path / "chosen")
-
-
-def test_windows_data_folder_is_local_app_data(monkeypatch):
-    monkeypatch.delenv("VEILUX_DATA_DIR", raising=False)
-    monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.setattr(server.os, "name", "nt")
-    monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\analyst\AppData\Local")
-    assert server.default_data_dir() == os.path.join(r"C:\Users\analyst\AppData\Local", "VEILUX")
 
 
 @posix_only
@@ -90,7 +111,10 @@ def test_port_check(tmp_path):
 
 def test_start_pair_use_stop_restart():
     """The same checks the release workflow runs against each packaged backend."""
+    # UTF-8 both ways: a failure message quotes the backend's output (emoji), which
+    # the Windows code page (cp1252) can neither print nor decode.
     result = subprocess.run([sys.executable, "packaging/smoke_test.py", sys.executable, "server.py"],
-                            cwd=ROOT, capture_output=True, text=True, timeout=300)
+                            cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace", timeout=300,
+                            env={**os.environ, "PYTHONIOENCODING": "utf-8"})
     assert result.returncode == 0, result.stdout + result.stderr
     assert "All smoke checks passed." in result.stdout
