@@ -126,8 +126,8 @@ Needs Python 3.12 or later.
 ## How it works
 
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"primaryColor":"#E6F7FD","primaryBorderColor":"#0C7AA6","primaryTextColor":"#0F2233","lineColor":"#5B7A99","clusterBkg":"#F4F9FC","clusterBorder":"#9FC9DC","titleColor":"#0F2233","edgeLabelBackground":"#FFFFFF"}}}%%
-flowchart LR
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#E6F7FD","primaryBorderColor":"#0C7AA6","primaryTextColor":"#0F2233","lineColor":"#5B7A99","clusterBkg":"#F4F9FC","clusterBorder":"#9FC9DC","titleColor":"#0F2233","edgeLabelBackground":"#FFFFFF"},"flowchart":{"wrappingWidth":320}}}%%
+flowchart TD
     SIEM[("🗄️ Your security tools<br/>Splunk · Sentinel · Defender<br/>Elastic · QRadar · any page or API")]
     EXT["🧩 Extension<br/>reads logs through<br/>your connections"]
     PROT["🛡️ Local backend<br/>masks credentials<br/>+ private values"]
@@ -167,8 +167,8 @@ flowchart LR
 Each case is a small investigation with **one shared memory**: its logs, its statistics and its **case notes**. Three actions work on that memory, and they are built on **the same protected request**, so a question or an email gets exactly the same protection as an analysis, the same placeholders, and the same record of what was sent.
 
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"primaryColor":"#E6F7FD","primaryBorderColor":"#0C7AA6","primaryTextColor":"#0F2233","lineColor":"#5B7A99","clusterBkg":"#F4F9FC","clusterBorder":"#9FC9DC","titleColor":"#0F2233","edgeLabelBackground":"#FFFFFF"}}}%%
-flowchart LR
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#E6F7FD","primaryBorderColor":"#0C7AA6","primaryTextColor":"#0F2233","lineColor":"#5B7A99","clusterBkg":"#F4F9FC","clusterBorder":"#9FC9DC","titleColor":"#0F2233","edgeLabelBackground":"#FFFFFF"},"flowchart":{"wrappingWidth":320}}}%%
+flowchart TD
     AN(["🔍 Analyze"]) --> CTX
     ASK(["💬 Ask"]) --> CTX
     REP(["✉️ Report"]) --> CTX
@@ -373,17 +373,18 @@ Token, password, app sign-in and named-cookie connections, search jobs and conte
 ## Sanitization controls and review
 
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"primaryColor":"#E6F7FD","primaryBorderColor":"#0C7AA6","primaryTextColor":"#0F2233","lineColor":"#5B7A99","clusterBkg":"#F4F9FC","clusterBorder":"#9FC9DC","titleColor":"#0F2233","edgeLabelBackground":"#FFFFFF"}}}%%
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#E6F7FD","primaryBorderColor":"#0C7AA6","primaryTextColor":"#0F2233","lineColor":"#5B7A99","clusterBkg":"#F4F9FC","clusterBorder":"#9FC9DC","titleColor":"#0F2233","edgeLabelBackground":"#FFFFFF"},"flowchart":{"wrappingWidth":320}}}%%
 flowchart TD
-    IN(["Logs · case notes · statistics · prompt · approved lessons"]) --> SEC
+    %% The arrow ends at the group, so it does not cross the group's title.
+    IN(["Logs · case notes · statistics<br/>prompt · approved lessons"]) --> LOCAL
     subgraph LOCAL["🛡️ Runs on your computer"]
-        SEC["① Credential detection · 10 mechanisms, one switch"] -- "high confidence → ⟦SECRET#n⟧" --> PRIV
+        SEC["① Credential detection<br/>10 mechanisms, one switch"] -- "high confidence<br/>→ ⟦SECRET#n⟧" --> PRIV
         SEC -- "uncertain" --> REV["Review · Keep or Hide"]
-        REV --> PRIV["② Privacy masking · IPs · users · hosts · domains · emails · your rules"]
-        PRIV --> FIN["③ Final boundary check · stops the request on failure"]
+        REV --> PRIV["② Privacy masking<br/>IPs · users · hosts · domains<br/>emails · your rules"]
+        PRIV --> FIN["③ Final boundary check<br/>stops the request on failure"]
     end
     FIN -- "placeholders only" --> AI{{"🤖 AI provider"}}
-    AI --> RESTORE["④ Restore privacy values locally · secrets stay ⟦SECRET#n⟧"]
+    AI --> RESTORE["④ Restore privacy values locally<br/>secrets stay ⟦SECRET#n⟧"]
 
     classDef safe fill:#0B1220,stroke:#00C8F8,color:#F1F5F9
     classDef ext fill:#FFF4E5,stroke:#E8920C,color:#3D2600
