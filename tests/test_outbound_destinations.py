@@ -312,7 +312,9 @@ def test_extraction_hides_unexpected_exception_text_but_keeps_its_own_messages()
 def test_public_error_messages():
     assert server.public_error(httpx.ReadTimeout('synthetic')) == 'The request timed out.'
     assert 'synthetic' not in server.public_error(httpx.ConnectError('synthetic-host-detail'))
-    assert server.public_error(ValueError('Enter the path.')) == 'Enter the path.'
+    assert server.public_error(server.ConnectorError('Enter the path.')) == 'Enter the path.'
+    # Only VEILUX's own messages are repeated; a library's ValueError is not.
+    assert 'synthetic' not in server.public_error(ValueError('synthetic-library-detail'))
     assert 'synthetic' not in server.public_error(KeyError('synthetic-key'))
 
 

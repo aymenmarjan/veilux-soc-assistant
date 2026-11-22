@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "VEILUX",
   "short_name": "VEILUX",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "homepage_url": "https://github.com/aymenmarjan/veilux-soc-assistant",
   "description": "Secure AI SOC Assistant. Configurable SIEM/SOAR connections, local and external AI, and privacy protection.",
   "minimum_chrome_version": "121",

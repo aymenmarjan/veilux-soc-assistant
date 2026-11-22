@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 1.0.1" src="https://img.shields.io/badge/version-1.0.1-0C7AA6?style=for-the-badge"/>
+  <img alt="Version 1.0.2" src="https://img.shields.io/badge/version-1.0.2-0C7AA6?style=for-the-badge"/>
   <img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-0B1220?style=for-the-badge"/>
   <img alt="Python 3.12+ when run from source" src="https://img.shields.io/badge/python-3.12%2B-0C7AA6?style=for-the-badge&logo=python&logoColor=white"/>
   <img alt="Manifest V3" src="https://img.shields.io/badge/extension-Manifest%20V3-0B1220?style=for-the-badge"/>
@@ -93,12 +93,12 @@ When a version is published, its packages are attached to this repository's **Re
 
 | Package | For |
 |---|---|
-| `veilux-1.0.1-chromium.zip` | Chrome, Edge, Brave, Opera, Vivaldi |
-| `veilux-1.0.1-firefox.xpi` | Firefox 140+ |
-| `veilux-backend-1.0.1-windows-x64.zip` | Windows 10/11 x64 |
-| `veilux-backend-1.0.1-linux-x64.tar.gz` | Linux x64, glibc 2.35+ |
-| `veilux-backend-1.0.1-macos-x64.tar.gz` | macOS, Intel |
-| `veilux-backend-1.0.1-macos-arm64.tar.gz` | macOS, Apple silicon |
+| `veilux-1.0.2-chromium.zip` | Chrome, Edge, Brave, Opera, Vivaldi |
+| `veilux-1.0.2-firefox.xpi` | Firefox 140+ |
+| `veilux-backend-1.0.2-windows-x64.zip` | Windows 10/11 x64 |
+| `veilux-backend-1.0.2-linux-x64.tar.gz` | Linux x64, glibc 2.35+ |
+| `veilux-backend-1.0.2-macos-x64.tar.gz` | macOS, Intel |
+| `veilux-backend-1.0.2-macos-arm64.tar.gz` | macOS, Apple silicon |
 | `SHA256SUMS.txt` | Checksums of every file |
 
 Verify a download against `SHA256SUMS.txt` before running it.
@@ -325,7 +325,8 @@ Token, password, app sign-in and named-cookie connections, search jobs and conte
 ### 🤖 AI
 
 - **Multi-provider AI analysis**: Groq, DeepSeek, Together AI, OpenRouter, Gemini, Claude. Pick per-request.
-- **Choose the model yourself**: VEILUX has no built-in model IDs, because providers retire them. In Settings → Providers and API keys, **Load models** lists the models your key can use right now (only the key is sent, never logs); pick one, or enter a model ID. If the provider later retires it, the analysis stops with a clear message instead of switching to another model. **Test All APIs** checks each key and the chosen model the same way, without sending a prompt.
+- **Choose the model yourself**: VEILUX has no built-in model IDs, because providers retire them. In Settings → Providers and API keys, **Load models** lists the models your key can use right now (only the key is sent, never logs); pick one, or enter a model ID. If the provider later retires it, the analysis stops with a clear message instead of switching to another model. **Test connection** in each provider's card, or **Test All APIs**, checks the key and the chosen model the same way, without sending a prompt.
+- **Output limit and reasoning per provider**: each provider's **Advanced** settings set the maximum output tokens (default 16,384, or the model's own maximum if it is lower; thinking counts towards it) and, where the provider documents it and the model reports it (DeepSeek and Claude), thinking on or off and the reasoning effort. An answer that is cut off says so; a model that uses the whole limit on reasoning gives a clear error instead of an empty result, and nothing is retried with a larger limit.
 - **OpenRouter free models**: in Settings → AI models, or under the provider in the popup, choose **Find free models** to see the models OpenRouter offers for free right now (context window, longest answer, input types, reasoning, tool use, availability date and description), then **Use this model**. Any other OpenRouter model ID can be entered too.
 - **Add your own model** in Settings → AI models → Your AI models: services speaking the OpenAI-compatible Chat Completions, Anthropic Messages, or Gemini GenerateContent API shape, including local runners such as Ollama and LM Studio. Choose a service, enter its exact model ID and key, then **Test connection** and **Save model**. Connection tests and analysis use the same configuration. See [your own AI models](docs/CUSTOM_MODELS.md).
 - **Ask: follow-up questions per case**: an **Ask** tab next to Analysis and Report holds a short conversation about the open case, no analysis needed first. Each question resends the whole case plus the last 8 exchanges through the same protection, in one request, so markers stay consistent. Choose a model per question, start from quick questions (edited in Settings → Prompts), keep useful answers with **Add to case notes**, and clear the conversation with **Start over**.
@@ -499,8 +500,8 @@ Extract the archive, then in Terminal, in the extracted folder:
 <td valign="top">
 
 ```bash
-tar -xzf veilux-backend-1.0.1-linux-x64.tar.gz
-./veilux-backend-1.0.1-linux-x64/veilux-backend
+tar -xzf veilux-backend-1.0.2-linux-x64.tar.gz
+./veilux-backend-1.0.2-linux-x64/veilux-backend
 ```
 
 </td>
@@ -582,7 +583,7 @@ Use the package from a release, or the `extension/` folder of a clone. Steps dif
 
 #### Chromium browsers
 
-From a release, extract `veilux-1.0.1-chromium.zip` first and select the extracted folder in step 3; from a clone, select the `veilux-soc-assistant/extension` folder.
+From a release, extract `veilux-1.0.2-chromium.zip` first and select the extracted folder in step 3; from a clone, select the `veilux-soc-assistant/extension` folder.
 
 | Browser | 1. Go to | 2. Turn on **Developer mode** | 3. Then |
 |---|---|---|---|
@@ -600,7 +601,7 @@ Chromium-based browsers need version 121 or later. Always load the extension fro
 
 1. Go to `about:debugging#/runtime/this-firefox`.
 2. Click **Load Temporary Add-on…**.
-3. Select `veilux-1.0.1-firefox.xpi`, or any file inside `veilux-soc-assistant/extension` (e.g. `manifest.json`).
+3. Select `veilux-1.0.2-firefox.xpi`, or any file inside `veilux-soc-assistant/extension` (e.g. `manifest.json`).
 4. The extension is active until Firefox is closed; you'll need to repeat this each restart.
 
 **Permanent install** (persists across restarts). Firefox installs extensions permanently only when Mozilla has signed them, even for internal/private use:
@@ -818,7 +819,7 @@ veilux-soc-assistant/
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). This is version 1.0.1; 1.0.0 was the first public release.
+See [CHANGELOG.md](CHANGELOG.md). This is version 1.0.2; 1.0.0 was the first public release.
 
 ## Security
 

@@ -110,12 +110,14 @@ def test_unrelated_errors_are_not_retried_and_are_readable(status,message):
 
 
 @pytest.mark.parametrize("fmt,body,expected", [
+    # Blocks are pieces of one answer and carry their own spacing, so they are
+    # joined as they are (as the providers' own SDKs do), not with new lines.
     ("anthropic", {"content":[{"type":"thinking","thinking":"private reasoning"},
-        {"type":"text","text":"First"},{"type":"text","text":"Second"}]}, "First\nSecond"),
-    ("openai", {"choices":[{"message":{"content":[{"type":"text","text":"One"},
+        {"type":"text","text":"First part, "},{"type":"text","text":"second part."}]}, "First part, second part."),
+    ("openai", {"choices":[{"message":{"content":[{"type":"text","text":"One\n"},
         {"type":"text","text":"Two"}]}}]}, "One\nTwo"),
     ("gemini", {"candidates":[{"content":{"parts":[{"thought":True,"text":"private reasoning"},
-        {"text":"Visible"},{"text":"answer"}]}}]}, "Visible\nanswer"),
+        {"text":"Visible ans"},{"text":"wer"}]}}]}, "Visible answer"),
 ])
 def test_all_visible_answer_blocks_are_read(fmt,body,expected):
     assert invoke(config(fmt),lambda request:httpx.Response(200,json=body)) == expected

@@ -1,7 +1,7 @@
 """Checks that a release package holds what it should, and nothing private.
 
-    python packaging/check_package.py dist/veilux-backend-1.0.1-linux-x64.tar.gz
-    python packaging/check_package.py dist/veilux-1.0.1-chromium.zip
+    python packaging/check_package.py dist/veilux-backend-1.0.2-linux-x64.tar.gz
+    python packaging/check_package.py dist/veilux-1.0.2-chromium.zip
 
 Backend packages: the program, its libraries, start instructions, licences
 and build record; the platform's icon assets (Windows: the icon and version

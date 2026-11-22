@@ -118,6 +118,7 @@ class V101UITests(unittest.TestCase):
             route.fulfill(json={'models': [{'id': 'synthetic-a', 'name': 'Synthetic A', 'context_length': 131072},
                                            {'id': 'synthetic-b', 'name': 'synthetic-b'}]})
         self.context.route('**/providers/*/models', models)
+        page.locator('#groq-card > summary').click()
         page.locator('#groq-api-key').fill('')
         page.locator('#groq-model-load').click()
         expect(page.locator('#groq-model-status')).to_contain_text('Enter the Groq API key first')
@@ -133,6 +134,7 @@ class V101UITests(unittest.TestCase):
         self.assertEqual({'id': 'synthetic-b', 'name': 'synthetic-b'},
                          page.evaluate("() => browser.storage.local.get('providerModels')")['providerModels']['groq'])
         # A typed model ID is checked, then saved as typed.
+        page.locator('#gemini-card > summary').click()
         page.locator('#gemini-model-picker summary', has_text='Enter a model ID').click()
         page.locator('#gemini-model-manual').fill('bad id with spaces')
         page.locator('#gemini-model-manual-use').click()

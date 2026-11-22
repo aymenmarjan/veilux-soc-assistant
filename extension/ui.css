@@ -221,7 +221,7 @@ summary { cursor:pointer; }
 .field-error { color:var(--danger); font-size:12px; margin:6px 0; }
 [aria-invalid=true] { border-color:var(--danger) !important; }
 .reset-section { border-color:var(--danger-line); }
-.settings-page :is(input,select,textarea,button) { scroll-margin-top:30px; scroll-margin-bottom:160px; }
+.settings-page :is(input,select,textarea,button,summary) { scroll-margin-top:30px; scroll-margin-bottom:160px; }
 @media(max-width:620px) {
   .settings-page { padding:14px; }
   .settings-layout { grid-template-columns:minmax(0,1fr); gap:10px; }
@@ -237,7 +237,11 @@ summary { cursor:pointer; }
   .workflow-heading { align-items:flex-start; }
   #clear-btn { margin-left:0; }
   .settings-page .section { padding:14px; }
+  /* The Save settings bar wraps to more lines here; keep focused controls above it. */
+  .settings-page :is(input,select,textarea,button,summary) { scroll-margin-bottom:220px; }
 }
+/* In a short window the bar would cover much of the page, so it stays at the end instead. */
+@media(max-height:480px) { .settings-dock { position:static; } }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none !important; scroll-behavior:auto !important; } }
 
 /* Older result, tool and editor panels, on the shared palette. */
@@ -761,3 +765,21 @@ body.reviewing .dock-uses { display:none; }
   .popup-page .case-label { max-width:100%; }
   .popup-page #settings-btn { flex:0 0 auto; }
 }
+/* Settings -> Providers and API keys: one collapsible card per provider. */
+.provider-cards { display:flex; flex-direction:column; gap:8px; margin:12px 0 16px; }
+.provider-card { border:1px solid var(--line); border-radius:8px; background:var(--surface-alt); min-width:0; }
+.provider-card[open] { border-color:var(--line-strong); }
+.provider-card > summary { display:flex; align-items:center; justify-content:space-between; gap:8px 12px; flex-wrap:wrap; padding:10px 14px; font-weight:600; list-style:none; }
+.provider-card > summary::-webkit-details-marker { display:none; }
+/* The same open/closed arrow in every browser; a flex summary hides the native one. */
+.provider-card-name::before { content:"▸"; display:inline-block; width:1em; color:var(--accent); transition:transform .15s; }
+.provider-card[open] .provider-card-name::before { transform:rotate(90deg); }
+.provider-card-state { font-size:12px; font-weight:600; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--muted); max-width:100%; overflow-wrap:anywhere; }
+.provider-card-state[data-state="ready"] { color:var(--success); background:var(--success-soft); border-color:var(--success-line); }
+.provider-card-state[data-state="partial"] { color:var(--warning); background:var(--warning-soft); border-color:var(--warning-line); }
+.provider-card-body { padding:0 14px 12px; }
+.provider-card-body .form-group input { width:100%; box-sizing:border-box; }
+.provider-advanced { margin:12px 0 0; padding-top:10px; border-top:1px solid var(--line); font-size:13px; }
+.provider-advanced > summary { color:var(--accent); font-weight:600; }
+.provider-advanced[open] > summary { margin-bottom:10px; }
+.provider-advanced input,.provider-advanced select { width:100%; max-width:260px; box-sizing:border-box; }
