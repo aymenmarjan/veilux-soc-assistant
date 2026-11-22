@@ -3,6 +3,67 @@
 All notable changes to VEILUX are listed here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.0.2
+
+### Fixed
+
+* **Reasoning models returned no analysis on long prompts.** Built-in
+  providers were sent a fixed limit of 4,000 output tokens (8,192 for Gemini).
+  Reasoning models such as DeepSeek's count their thinking in that limit, so
+  they could use all of it before writing an answer: the request showed HTTP
+  200 and "Done" with nothing to read. The default is now 16,384 tokens, or the
+  model's own maximum when its provider reports a lower one, and it can be
+  changed per provider.
+* **No answer is never reported as done.** An empty, whitespace-only or
+  reasoning-only reply, or one that reached the output limit before any answer,
+  now fails with a message that says what happened and which setting to
+  change, and the record of what was sent shows it as failed. An answer cut off
+  at the limit is shown with a note, and recorded as cut off; a report cut off
+  before its end says so instead of blaming the model. This applies to Analyze,
+  Ask and Report alike. Nothing is retried, and no limit is raised without the
+  analyst.
+* **Answers are read in full, and only the visible part.** Gemini answers in
+  several parts are joined (only the first part was read); Gemini thought
+  parts, Claude thinking blocks, `reasoning_content` and `<think>` sections are
+  never part of the analysis. Gemini safety and other blocks, and Claude
+  refusals, are explained.
+* **Claude:** no temperature is sent, because current Claude models refuse any
+  value other than their default.
+* **Groq** receives the limit as `max_completion_tokens`, its current name.
+* A model's refusal of the output limit gets its own message, and OpenRouter
+  errors no longer repeat the service's raw reply.
+
+### Added
+
+* **Advanced settings per provider** (Settings → Providers and API keys →
+  provider → Advanced): **Maximum output tokens** for every built-in provider;
+  **Thinking** and **Reasoning effort** for DeepSeek and Claude models whose
+  model list reports them, with only the levels the model supports. **Load
+  models** now keeps each model's reported output limit and reasoning options.
+  Saved 1.0.1 settings keep working: a model chosen before 1.0.2 gets the
+  default limit and no reasoning settings until it is chosen again from the
+  list. The settings are included in exports.
+
+### Changed
+
+* **Settings → Providers and API keys** is a list of collapsible cards, one
+  per provider, each showing whether it has a key and a model. A card holds the
+  API key, the model choice (Load models or a typed ID), **Test connection**
+  and the collapsed **Advanced** settings. **Test All APIs** is unchanged.
+* Settings: a control reached with the keyboard is no longer left behind the
+  Save settings bar, and in a short window the bar stays at the end of the
+  page instead of covering it.
+
+### Security
+
+* Connection checks, extraction and model-list errors repeat only messages
+  written by VEILUX and fields of the service's structured error. Exception
+  text, non-JSON and HTML error bodies are no longer shown, and any credential
+  VEILUX sent (header, cookie, token or Basic user and password) is replaced
+  with `[hidden]` if a service echoes it, however short it is (CodeQL alert
+  32). The same applies to OpenRouter errors inside a successful reply and to
+  a search job's ID, status and error reason.
+
 ## 1.0.1
 
 ### Fixed

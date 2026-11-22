@@ -180,6 +180,7 @@ class InterfaceUITests(unittest.TestCase):
         for section in ('ai', 'protection', 'prompts', 'backup', 'connections'):
             self.page.locator('.settings-nav a[href="#' + section + '"]').click()
             expect(self.page.locator('.settings-nav a[href="#' + section + '"]')).to_have_attribute('aria-current','location')
+        self.page.locator('#groq-card > summary').click()
         self.page.locator('#groq-api-key').fill('synthetic-edited')
         expect(self.page.locator('#settings-save-state')).to_contain_text('Unsaved settings')
         self.page.locator('#add-custom-model-trigger').click()
@@ -222,6 +223,7 @@ class InterfaceUITests(unittest.TestCase):
         self.page.locator('#cm-name').fill('Cancelled title')
         self.page.locator('#cancel-custom-model').click()
         expect(row).to_contain_text('Synthetic model')
+        self.page.locator('#groq-card > summary').click()
         self.page.locator('#groq-api-key').fill('unsaved-key')
         row.get_by_role('button', name='Edit Synthetic model').click()
         self.page.locator('#cm-name').fill('Renamed model')
@@ -354,6 +356,7 @@ class InterfaceUITests(unittest.TestCase):
             route.fulfill(json={}, headers={'Access-Control-Allow-Origin':'*'})
         self.context.route(re.compile(r'^https://'), provider_reply)
         for provider in ('groq','deepseek','together','openrouter','gemini','claude'):
+            self.page.locator('#' + provider + '-card > summary').click()
             self.page.locator('#' + provider + '-api-key').fill('synthetic-key')
         # Keys are checked through each provider's model list (via the backend);
         # only OpenRouter's key endpoint is called from the browser. No prompt is sent.

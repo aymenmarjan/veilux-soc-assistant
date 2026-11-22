@@ -64,7 +64,7 @@ try:
 except AttributeError:
     pass
 
-VERSION = "1.0.1"  # keep in step with extension/manifest.json
+VERSION = "1.0.2"  # keep in step with extension/manifest.json
 @asynccontextmanager
 async def lifespan(_app):
     _open_pairing_window()  # defined with the pairing endpoints below
@@ -557,6 +557,15 @@ class SecretOptions(BaseModel):
     heuristic_settings: Optional[HeuristicSettings] = None
 
 
+class GenerationSettings(BaseModel):
+    """How much a built-in provider may write, and how it reasons. Settings ->
+    Providers and API keys -> Advanced. Thinking and effort are only sent where
+    the provider documents them (DeepSeek, Claude) and the model reports them."""
+    max_output_tokens: Optional[int] = Field(default=None, ge=1, le=1_000_000)
+    thinking: Literal["default", "on", "off"] = "default"
+    effort: Optional[str] = Field(default=None, pattern=r"^[a-z]{1,12}$")
+
+
 class LogAnalysisRequest(SecretOptions):
     logs: List[str]
     request_id: Optional[str] = Field(default=None, max_length=80)
@@ -569,6 +578,7 @@ class LogAnalysisRequest(SecretOptions):
     # and API keys). There is no built-in default: provider model lists change,
     # so VEILUX never picks or swaps a model on its own.
     model: Optional[str] = Field(default=None, max_length=200)
+    generation: Optional[GenerationSettings] = None
     # Granular sanitization controls
     enable_pattern_sanitization: bool = True
     custom_keywords: Optional[Dict[str, str]] = None  # Only enabled keywords
@@ -3192,7 +3202,7 @@ async def _analyze_logs(request: LogAnalysisRequest):
             if not (request.openrouter_model or "").strip():
                 raise HTTPException(status_code=400, detail="Choose an OpenRouter model in Settings → AI models (Find free models), "
                                                             "or paste a model ID.")
-            analysis = await asyncio.wait_for(call_openrouter_ai(prompt, request.api_key, request.openrouter_model.strip()), AI_TIMEOUT_SECONDS)
+            analysis = await asyncio.wait_for(call_openrouter_ai(prompt, request.api_key, request.openrouter_model.strip(), request.generation), AI_TIMEOUT_SECONDS)
         else:
             if request.mode not in ai_funcs:
                 raise HTTPException(status_code=400, detail=f"Unknown mode: {request.mode}")
@@ -3203,10 +3213,12 @@ async def _analyze_logs(request: LogAnalysisRequest):
             # The chosen model is passed only when there is one; the provider call
             # refuses to run without it (chosen_model), so nothing is sent.
             model_argument = {"model": request.model.strip()} if (request.model or "").strip() else {}
+            if request.generation:
+                model_argument["generation"] = request.generation
             analysis = await asyncio.wait_for(ai_funcs[request.mode](prompt, request.api_key, **model_argument), AI_TIMEOUT_SECONDS)
         _job_context.get()["timings_ms"]["ai"] = (time.perf_counter()-ai_started)*1000
         if sent:
-            sent["outcome"] = "answered"
+            sent["outcome"] = "answered (cut off at the output limit)" if _job_context.get().get("answer_cut_off") else "answered"
         
         if is_sanitized and mapping:
             analysis = replace_placeholders(analysis, mapping, privacy_context)
@@ -3348,7 +3360,7 @@ def _custom_answer(data):
         if isinstance(value, str):
             return value
         if isinstance(value, list):
-            return "\n".join(block["text"] for block in value
+            return "".join(block["text"] for block in value
                 if isinstance(block, dict) and not block.get("thought")
                 and block.get("type", "text") in ("text", "output_text")
                 and isinstance(block.get("text"), str))
@@ -3356,7 +3368,7 @@ def _custom_answer(data):
     if not isinstance(data, dict):
         return ""
     for path in ("choices.0.message.content", "content", "candidates.0.content.parts", "choices.0.text", "message.content"):
-        text = visible(_resolve_path(data, path))
+        text = _without_thinking(visible(_resolve_path(data, path)))
         if text.strip():
             return text
     return ""
@@ -3429,10 +3441,8 @@ async def call_custom_ai(prompt: str, api_key: Optional[str], config: "CustomPro
         data = response.json()
     except ValueError:
         raise HTTPException(502, f"{label}: the service did not return JSON. Check the service URL and connection type.")
-    text = _custom_answer(data)
-    if not text.strip():
-        raise HTTPException(502, f"{label}: the service returned no answer text. Increase the response length limit for a reasoning model, or check the connection type.")
-    return text
+    return usable_answer(label, _custom_answer(data), answer_parts(fmt, data)[1], config.max_tokens,
+                         "the Response length limit (Settings → Your AI models)")
 
 
 # Built-in providers: name and chat endpoint ({model} is filled for Gemini).
@@ -3454,6 +3464,18 @@ _MODEL_UNAVAILABLE = re.compile(
     re.IGNORECASE)
 
 
+_OUTPUT_LIMIT_PARAMETER = re.compile(r"max_completion_tokens|max_tokens|max_output_tokens|maxOutputTokens", re.IGNORECASE)
+# Reasoning models spend part of the output on thinking before they answer
+# (DeepSeek, Gemini and Claude count it in the same limit), so the old 4,000
+# left long prompts with no answer. Settings can lower or raise this, and the
+# extension caps it at the maximum the provider reports for the model.
+DEFAULT_MAX_OUTPUT_TOKENS = 16384
+
+
+def output_limit(generation: Optional[GenerationSettings]) -> int:
+    return (generation.max_output_tokens if generation else None) or DEFAULT_MAX_OUTPUT_TOKENS
+
+
 def provider_endpoint(mode: str, model: str) -> str:
     return AI_PROVIDERS[mode][1].replace("{model}", quote(model.removeprefix("models/"), safe=""))
 
@@ -3464,7 +3486,7 @@ def chosen_model(mode: str, model: Optional[str]) -> str:
     value = (model or "").strip()
     if not value:
         raise HTTPException(400, f"Choose a {name} model first: Settings → Providers and API keys → "
-                                 f"{name} model → Load models. VEILUX does not pick a model for you.")
+                                 f"{name} → Load models. VEILUX does not pick a model for you.")
     if not MODEL_ID_PATTERN.fullmatch(value):
         raise HTTPException(400, f"{name}: “{value[:80]}” is not a valid model ID. Choose one from Load models.")
     return value
@@ -3479,70 +3501,172 @@ def provider_failure(name: str, model: Optional[str], response: httpx.Response) 
         return HTTPException(code, f"{name} refused the API key (HTTP {code}). Check the key in Settings → Providers and API keys.")
     if code == 429:
         return HTTPException(429, f"{name} is rate-limiting this key right now (HTTP 429). Wait a moment and try again.")
+    if code in (400, 422) and _OUTPUT_LIMIT_PARAMETER.search(text):
+        return HTTPException(400, f"{name} refused the output limit for “{model}”: {text[:200]} Lower Maximum output "
+                                  f"tokens in Settings → Providers and API keys → {name} → Advanced.")
     if model and (code == 404 or _MODEL_UNAVAILABLE.search(text)):
         return HTTPException(400, f"{name}: the model “{model}” is not available to this API key (it may have been "
                                   "retired or renamed). Choose another model in Settings → Providers and API keys → "
-                                  f"{name} model → Load models. No other model was tried.")
+                                  f"{name} → Load models. No other model was tried.")
     return HTTPException(code if 400 <= code < 600 else 502, f"{name} returned HTTP {code}" + (f": {text[:200]}" if text else "."))
 
 
-async def _openai_style_chat(mode: str, prompt: str, api_key: str, model: Optional[str], timeout: float) -> str:
+# Gemini finish reasons that mean the answer was withheld, not completed.
+_GEMINI_WITHHELD = {"SAFETY", "RECITATION", "LANGUAGE", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "OTHER",
+                    "MALFORMED_RESPONSE", "PUP_LIMITED_DISABLED"}
+
+
+def _without_thinking(text: str) -> str:
+    """Content with a leading <think>…</think> block removed, as some reasoning
+    models (Groq's raw format, DeepSeek-R1 on Together) write their reasoning."""
+    stripped = text.lstrip()
+    if not stripped.startswith("<think>"):
+        return text
+    end = stripped.find("</think>")
+    return "" if end < 0 else stripped[end + len("</think>"):]
+
+
+def answer_parts(api_format: str, data) -> Tuple[str, str]:
+    """The visible answer in a chat response, and why it ended: "limit" (the
+    output limit was reached), "withheld: <reason>", "reasoning only" or "".
+    Thinking (Claude thinking blocks, Gemini thought parts, reasoning fields)
+    is never part of the answer."""
+    if not isinstance(data, dict):
+        return "", ""
+    if api_format == "anthropic":
+        blocks = data.get("content") if isinstance(data.get("content"), list) else []
+        text = "".join(block["text"] for block in blocks if isinstance(block, dict)
+                       and block.get("type", "text") == "text" and isinstance(block.get("text"), str))
+        stop = data.get("stop_reason")
+        return text, "limit" if stop == "max_tokens" else "withheld: refusal" if stop == "refusal" else ""
+    if api_format == "gemini":
+        candidates = data.get("candidates") if isinstance(data.get("candidates"), list) else []
+        if not candidates:
+            reason = (data.get("promptFeedback") or {}).get("blockReason") if isinstance(data.get("promptFeedback"), dict) else None
+            return "", f"withheld: {reason}" if reason else ""
+        candidate = candidates[0] if isinstance(candidates[0], dict) else {}
+        parts = (candidate.get("content") or {}).get("parts") if isinstance(candidate.get("content"), dict) else None
+        text = "".join(part["text"] for part in parts or [] if isinstance(part, dict)
+                       and not part.get("thought") and isinstance(part.get("text"), str))
+        reason = candidate.get("finishReason") or ""
+        return text, "limit" if reason == "MAX_TOKENS" else f"withheld: {reason}" if reason in _GEMINI_WITHHELD else ""
+    choices = data.get("choices") if isinstance(data.get("choices"), list) else []
+    choice = choices[0] if choices and isinstance(choices[0], dict) else {}
+    message = choice.get("message") if isinstance(choice.get("message"), dict) else {}
+    content = message.get("content")
+    if isinstance(content, list):
+        content = "".join(part["text"] for part in content if isinstance(part, dict)
+                          and part.get("type", "text") in ("text", "output_text") and isinstance(part.get("text"), str))
+    text = _without_thinking(content) if isinstance(content, str) else ""
+    finish = choice.get("finish_reason")
+    if finish == "length":
+        return text, "limit"
+    if finish == "content_filter":
+        return text, "withheld: content filter"
+    if not text.strip() and (message.get("reasoning_content") or message.get("reasoning")):
+        return text, "reasoning only"
+    return text, ""
+
+
+def usable_answer(label: str, text: str, ending: str, limit: int, setting: str) -> str:
+    """The answer to show, or an HTTPException that says why there is none.
+    A request is never reported as answered without visible text, and nothing
+    is retried with a larger limit: that would spend more of the analyst's
+    tokens without asking."""
+    if ending.startswith("withheld"):
+        raise HTTPException(400, f"{label} withheld the answer ({ending.split(': ', 1)[1]}). "
+                                 "Rephrase the analysis prompt or choose another model.")
+    if not text.strip():
+        if ending == "limit":
+            raise HTTPException(502, f"{label} reached its output limit ({limit:,} tokens) before writing an answer; "
+                                     f"a reasoning model can spend it all on thinking. Raise {setting}, or choose a "
+                                     "lower reasoning effort if the model offers one.")
+        if ending == "reasoning only":
+            raise HTTPException(502, f"{label} returned only its reasoning and no answer. Try again, or choose a lower "
+                                     "reasoning effort if the model offers one.")
+        raise HTTPException(502, f"{label} returned no answer text. Try again or choose another model.")
+    if ending == "limit":
+        job = _job_context.get()
+        if job is not None:
+            job["answer_cut_off"] = True
+        text += (f"\n\n---\n*The answer was cut off at the output limit ({limit:,} tokens). "
+                 f"Raise {setting} to get it complete.*")
+    return text
+
+
+def _advanced(name: str) -> str:
+    return f"Maximum output tokens (Settings → Providers and API keys → {name} → Advanced)"
+
+
+async def _openai_style_chat(mode: str, prompt: str, api_key: str, model: Optional[str], timeout: float,
+                             generation: Optional[GenerationSettings] = None) -> str:
     name, endpoint = AI_PROVIDERS[mode]
     model = chosen_model(mode, model)
+    limit = output_limit(generation)
+    payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2}
+    # Groq deprecated max_tokens in favour of max_completion_tokens.
+    payload["max_completion_tokens" if mode == "groq" else "max_tokens"] = limit
+    if mode == "deepseek" and generation:
+        # DeepSeek: "thinking" switches thinking mode; reasoning_effort sets its depth.
+        if generation.thinking != "default":
+            payload["thinking"] = {"type": "enabled" if generation.thinking == "on" else "disabled"}
+        if generation.effort and generation.thinking != "off":
+            payload["reasoning_effort"] = generation.effort
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
         response = await client.post(
             endpoint,
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 4000}
+            json=payload
         )
     if response.status_code != 200:
         raise provider_failure(name, model, response)
     try:
-        return response.json()["choices"][0]["message"]["content"]
-    except (ValueError, KeyError, IndexError, TypeError):
+        data = response.json()
+    except ValueError:
         raise HTTPException(502, f"{name} ({model}) returned an answer VEILUX could not read.") from None
+    return usable_answer(f"{name} ({model})", *answer_parts("openai", data), limit, _advanced(name))
 
 
-async def call_groq_ai(prompt: str, api_key: str, model: Optional[str] = None) -> str:
-    return await _openai_style_chat("groq", prompt, api_key, model, 60.0)
+async def call_groq_ai(prompt: str, api_key: str, model: Optional[str] = None,
+                       generation: Optional[GenerationSettings] = None) -> str:
+    return await _openai_style_chat("groq", prompt, api_key, model, 60.0, generation)
 
 
-async def call_deepseek_ai(prompt: str, api_key: str, model: Optional[str] = None) -> str:
-    return await _openai_style_chat("deepseek", prompt, api_key, model, 120.0)
+async def call_deepseek_ai(prompt: str, api_key: str, model: Optional[str] = None,
+                           generation: Optional[GenerationSettings] = None) -> str:
+    return await _openai_style_chat("deepseek", prompt, api_key, model, 120.0, generation)
 
 
-async def call_together_ai(prompt: str, api_key: str, model: Optional[str] = None) -> str:
-    return await _openai_style_chat("together", prompt, api_key, model, 90.0)
+async def call_together_ai(prompt: str, api_key: str, model: Optional[str] = None,
+                           generation: Optional[GenerationSettings] = None) -> str:
+    return await _openai_style_chat("together", prompt, api_key, model, 90.0, generation)
 
 
 OPENROUTER_API = "https://openrouter.ai/api/v1"
 
 
-async def call_openrouter_ai(prompt: str, api_key: str, model: str) -> str:
+async def call_openrouter_ai(prompt: str, api_key: str, model: str, generation: Optional[GenerationSettings] = None) -> str:
+    limit = output_limit(generation)
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(
             f"{OPENROUTER_API}/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://veilux.local"},
-            json={"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 4000}
+            json={"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": limit}
         )
     if response.status_code == 429:
         raise HTTPException(status_code=429, detail=f"OpenRouter: {model} is rate-limited right now. Free models have low limits; "
                                                      "try again shortly or choose another model.")
     if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail=f"OpenRouter ({model}): {response.text[:200]}")
-    data = response.json()
+        raise provider_failure("OpenRouter", model, response)
+    try:
+        data = response.json()
+    except ValueError:
+        raise HTTPException(502, f"OpenRouter ({model}) returned an answer VEILUX could not read.") from None
     # OpenRouter can report a provider failure inside a 200 response.
-    if data.get("error"):
-        message = data["error"].get("message") if isinstance(data["error"], dict) else str(data["error"])
-        raise HTTPException(status_code=502, detail=f"OpenRouter ({model}): {str(message)[:200]}")
-    choice = (data.get("choices") or [{}])[0]
-    content = (choice.get("message") or {}).get("content")
-    if not content:
-        if choice.get("finish_reason") == "length":
-            raise HTTPException(status_code=502, detail=f"OpenRouter ({model}) used its whole answer budget for reasoning "
-                                                         "and returned no answer. Choose another model.")
-        raise HTTPException(status_code=502, detail=f"OpenRouter ({model}) returned an empty answer. Try again or choose another model.")
-    return content
+    if isinstance(data, dict) and data.get("error"):
+        message = data["error"].get("message") if isinstance(data["error"], dict) else data["error"]
+        raise HTTPException(status_code=502, detail=f"OpenRouter ({model}): {upstream_text(message or 'request failed', response, 200)}")
+    return usable_answer(f"OpenRouter ({model})", *answer_parts("openai", data), limit, _advanced("OpenRouter"))
 
 
 def _price_is_zero(value) -> bool:
@@ -3595,8 +3719,10 @@ def openrouter_free_models(models: list, today: Optional[str] = None) -> list:
     return sorted(result, key=lambda m: m["name"].lower())
 
 
-async def call_gemini_ai(prompt: str, api_key: str, model: Optional[str] = None) -> str:
+async def call_gemini_ai(prompt: str, api_key: str, model: Optional[str] = None,
+                         generation: Optional[GenerationSettings] = None) -> str:
     model = chosen_model("gemini", model)
+    limit = output_limit(generation)
     async with httpx.AsyncClient(timeout=180.0, follow_redirects=False) as client:
         response = await client.post(
             provider_endpoint("gemini", model),
@@ -3605,7 +3731,7 @@ async def call_gemini_ai(prompt: str, api_key: str, model: Optional[str] = None)
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
                     "temperature": 0.2,
-                    "maxOutputTokens": 8192
+                    "maxOutputTokens": limit
                 },
                 "safetySettings": [
                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -3617,22 +3743,23 @@ async def call_gemini_ai(prompt: str, api_key: str, model: Optional[str] = None)
         )
     if response.status_code != 200:
         raise provider_failure("Gemini", model, response)
-    result = response.json()
-    if "candidates" in result and result["candidates"]:
-        candidate = result["candidates"][0]
-        finish_reason = candidate.get("finishReason", "")
-        parts = candidate.get("content", {}).get("parts", [])
-        text = parts[0].get("text", "") if parts else ""
-        if finish_reason == "SAFETY":
-            raise HTTPException(status_code=400, detail="Gemini blocked this request due to safety filters. Try a different provider.")
-        if not text:
-            raise HTTPException(status_code=500, detail=f"Gemini returned empty response (finishReason: {finish_reason})")
-        return text
-    raise HTTPException(status_code=500, detail="Bad Gemini response — no candidates returned")
+    try:
+        data = response.json()
+    except ValueError:
+        raise HTTPException(502, f"Gemini ({model}) returned an answer VEILUX could not read.") from None
+    return usable_answer(f"Gemini ({model})", *answer_parts("gemini", data), limit, _advanced("Gemini"))
 
 
-async def call_claude_ai(prompt: str, api_key: str, model: Optional[str] = None) -> str:
+async def call_claude_ai(prompt: str, api_key: str, model: Optional[str] = None,
+                         generation: Optional[GenerationSettings] = None) -> str:
     model = chosen_model("claude", model)
+    limit = output_limit(generation)
+    # No temperature: current Claude models reject any non-default value.
+    payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": limit}
+    if generation and generation.thinking != "default":
+        payload["thinking"] = {"type": "adaptive" if generation.thinking == "on" else "disabled"}
+    if generation and generation.effort:
+        payload["output_config"] = {"effort": generation.effort}
     async with httpx.AsyncClient(timeout=120.0, follow_redirects=False) as client:
         response = await client.post(
             AI_PROVIDERS["claude"][1],
@@ -3641,12 +3768,15 @@ async def call_claude_ai(prompt: str, api_key: str, model: Optional[str] = None)
                 "anthropic-version": "2023-06-01",
                 "Content-Type": "application/json"
             },
-            json={"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 4000}
+            json=payload
         )
     if response.status_code != 200:
         raise provider_failure("Claude", model, response)
-    result = response.json()
-    return result["content"][0]["text"]
+    try:
+        data = response.json()
+    except ValueError:
+        raise HTTPException(502, f"Claude ({model}) returned an answer VEILUX could not read.") from None
+    return usable_answer(f"Claude ({model})", *answer_parts("anthropic", data), limit, _advanced("Claude"))
 
 
 # ============== SIEM / SOAR API READS ==============
@@ -3756,7 +3886,11 @@ def _substitute_json_body(template: str, params: Dict[str, str]) -> dict:
         if rendered is None:
             return m.group(0)
         return json.dumps(rendered)[1:-1]  # escaped string content, without the surrounding quotes
-    return json.loads(_TEMPLATE_VAR.sub(repl, template))
+    try:
+        return json.loads(_TEMPLATE_VAR.sub(repl, template))
+    except json.JSONDecodeError:
+        raise ConnectorError("The request body is not valid JSON once its values are filled in. "
+                             "Check it under the connection's API request step.") from None
 
 
 def _resolve_path(data, path: str):
@@ -3794,7 +3928,7 @@ async def fetch_single_log(client: httpx.AsyncClient, base_url: str, params: Dic
     if body_template and body_template.strip():
         try:
             request_kwargs["json"] = _substitute_json_body(body_template, params)
-        except json.JSONDecodeError as e:
+        except ConnectorError as e:
             siem_log.warning(f"api_body_template is not valid JSON after substitution: {e}")
             return None
 
@@ -3893,7 +4027,7 @@ async def _oauth_access_token(request: "SiemFetchRequest") -> str:
         form["scope"] = request.oauth_scope.strip()
     try:
         verify = await asyncio.to_thread(_connector_ssl_context, request.tls_trust, request.ca_bundle_pem)
-    except ValueError as exc:
+    except ConnectorError as exc:
         raise HTTPException(400, str(exc)) from exc
     try:
         async with httpx.AsyncClient(timeout=20.0, verify=verify, follow_redirects=False) as client:
@@ -3956,7 +4090,12 @@ def _summarize_request_errors(errors):
     return f"All {len(errors)} requests failed. First failure: {errors[0]}"
 
 
-class _SiemAccessError(ValueError):
+class ConnectorError(ValueError):
+    """A connector failure described by VEILUX itself. Its message is written
+    for the analyst; it is the only exception text a response may repeat."""
+
+
+class _SiemAccessError(ConnectorError):
     """A sign-in/permission failure or redirect with an actionable message."""
 
     def __init__(self, message, status_code):
@@ -4010,11 +4149,11 @@ def _connector_ssl_context(trust, ca_pem):
         context.load_default_certs(ssl.Purpose.SERVER_AUTH)
     if ca_pem.strip():
         if 'PRIVATE KEY' in ca_pem or '-----BEGIN CERTIFICATE-----' not in ca_pem:
-            raise ValueError('Use a public CA certificate in PEM format, not a private key.')
+            raise ConnectorError('Use a public CA certificate in PEM format, not a private key.')
         try:
             context.load_verify_locations(cadata=ca_pem)
         except (ssl.SSLError, ValueError) as exc:
-            raise ValueError('The CA certificate could not be read. Use a PEM certificate or CA bundle from your IT team.') from exc
+            raise ConnectorError('The CA certificate could not be read. Use a PEM certificate or CA bundle from your IT team.') from exc
     return context
 
 
@@ -4023,7 +4162,7 @@ async def _connector_verify(request):
         return False  # Preserve an explicitly saved preference; never retry with it automatically.
     try:
         return await asyncio.to_thread(_connector_ssl_context, request.tls_trust, request.ca_bundle_pem)
-    except ValueError as exc:
+    except ConnectorError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
@@ -4046,7 +4185,7 @@ def _require_connector_values(templates, params):
     missing = {m.group(1) for template in templates if template
                for m in _TEMPLATE_VAR.finditer(template) if m.group(1) not in params}
     if missing:
-        raise ValueError("Missing request values: " + ', '.join(sorted(missing)) + ". No value source supplied them for this page. Open the page that shows them, or add a value source or fixed value under Request values.")
+        raise ConnectorError("Missing request values: " + ', '.join(sorted(missing)) + ". No value source supplied them for this page. Open the page that shows them, or add a value source or fixed value under Request values.")
 
 
 # ---- Where connector requests may go ----
@@ -4058,8 +4197,8 @@ def _require_connector_values(templates, params):
 # fill path segments and query parameters, and every built address is checked
 # to stay on the configured API address. Cloud instance-metadata endpoints are
 # refused outright: no SIEM lives there, and they hand out cloud credentials.
-class DestinationError(ValueError):
-    """An outbound address VEILUX refuses to contact. The message is safe to show."""
+class DestinationError(ConnectorError):
+    """An outbound address VEILUX refuses to contact."""
 
 
 _METADATA_HOSTS = {"metadata.google.internal", "metadata.goog", "metadata", "instance-data",
@@ -4158,7 +4297,7 @@ def _path_value(value: str) -> str:
 
 def _connector_url(base_url, template, params):
     if not template or not template.startswith('/') or template.startswith('//'):
-        raise ValueError("Enter a request path beginning with /, relative to the API address.")
+        raise ConnectorError("Enter a request path beginning with /, relative to the API address.")
     base = connector_base(base_url)
     _require_connector_values([template], params)
     path = _TEMPLATE_VAR.sub(lambda m: _path_value(_render_template_var(params, m.group(1), m.group(2), m.group(3))), template)
@@ -4177,17 +4316,17 @@ def _plain_url(base_url, template):
 
 
 def public_error(exc: BaseException) -> str:
-    """What a failed connector request tells the extension. VEILUX's own
-    messages (ValueError, RuntimeError, DestinationError) are written to be
-    shown; for anything else only the kind of failure is returned, and the
-    details stay in the backend's own log."""
+    """What a failed request tells the extension. Only ConnectorError messages,
+    which VEILUX writes itself, are repeated. Any other exception (a library's
+    ValueError included) can carry addresses, values or response text, so only
+    its kind is returned and the details stay in the backend's own log."""
+    if isinstance(exc, ConnectorError) and str(exc):
+        return _CONTROL_CHARACTERS.sub(" ", str(exc))[:500]
     if isinstance(exc, httpx.TimeoutException) or isinstance(exc, TimeoutError):
         return "The request timed out."
     if isinstance(exc, httpx.HTTPError):
         return "The API could not be reached (" + type(exc).__name__ + "). Check the address and the network."
-    if isinstance(exc, (ValueError, RuntimeError)) and str(exc):
-        return _CONTROL_CHARACTERS.sub(" ", str(exc))[:500]
-    siem_log.debug("Connector request failed", exc_info=exc)
+    siem_log.debug("Request failed", exc_info=exc)
     return "The request failed (" + type(exc).__name__ + "). The backend window has the details."
 
 
@@ -4235,7 +4374,7 @@ async def fetch_via_search_job(client: httpx.AsyncClient, base_url: str, params:
     """
     if not request.job_create_path_template or not request.job_status_path_template \
             or not request.job_results_path_template:
-        raise ValueError("search_job mode requires job create/status/results path templates")
+        raise ConnectorError("search_job mode requires job create/status/results path templates")
 
 
     # 1. Create the job
@@ -4250,7 +4389,7 @@ async def fetch_via_search_job(client: httpx.AsyncClient, base_url: str, params:
     as_form = request.job_create_parameters_as == "form"
     has_body = bool(request.job_create_body_template and request.job_create_body_template.strip())
     if as_form and has_body:
-        raise ValueError("Send the search's start parameters either as a form body or with a JSON body, not both.")
+        raise ConnectorError("Send the search's start parameters either as a form body or with a JSON body, not both.")
     if request.job_create_query_template:
         rendered = {k: _substitute_plain(v, params) for k, v in request.job_create_query_template.items()}
         if as_form:
@@ -4265,11 +4404,12 @@ async def fetch_via_search_job(client: httpx.AsyncClient, base_url: str, params:
     response = await client.request(request.job_create_method, create_url, **create_kwargs)
     _check_siem_access(response, request)
     if response.status_code not in (200, 201):
-        raise RuntimeError(_http_failure("Starting the search failed", response))
+        raise ConnectorError(_http_failure("Starting the search failed", response))
 
     job_id = _resolve_path(response.json(), request.job_id_path)
+    shown_id = upstream_text(job_id, response, 100)
     if job_id is None:
-        raise RuntimeError(f"could not find job id at '{request.job_id_path}' in create response")
+        raise ConnectorError(f"could not find job id at '{request.job_id_path}' in create response")
 
     job_params = dict(params)
     job_params["job_id"] = str(job_id)
@@ -4284,16 +4424,19 @@ async def fetch_via_search_job(client: httpx.AsyncClient, base_url: str, params:
         response = await client.get(status_url, headers=headers, cookies=cookies)
         _check_siem_access(response, request)
         if response.status_code != 200:
-            raise RuntimeError(_http_failure("Checking the search status failed", response))
+            raise ConnectorError(_http_failure("Checking the search status failed", response))
         status_body = response.json()
-        status = str(_resolve_path(status_body, request.job_status_field) or "").upper()
+        reported = _resolve_path(status_body, request.job_status_field) or ""
+        status = str(reported).upper()
         if status in complete_values:
             break
         if status in error_values:
             reason = _message_text(_resolve_path(status_body, request.job_error_message_path)) if request.job_error_message_path else ""
-            raise RuntimeError(f"search job {job_id} ended in status {status}" + (f": {reason[:300]}" if reason else ""))
+            raise ConnectorError(f"search job {shown_id} ended in status {status}"
+                                 + (f": {upstream_text(reason, response, 300)}" if reason else ""))
         if asyncio.get_event_loop().time() >= deadline:
-            raise RuntimeError(f"search job {job_id} timed out after {request.job_timeout_seconds:.0f}s (last status: {status})")
+            raise ConnectorError(f"search job {shown_id} timed out after {request.job_timeout_seconds:.0f}s "
+                                 f"(last status: {upstream_text(reported, response, 60)})")
         await asyncio.sleep(max(request.job_poll_interval_seconds, 0.5))
 
     # 3. Fetch results, page by page when offset pagination is set
@@ -4310,7 +4453,7 @@ async def fetch_via_search_job(client: httpx.AsyncClient, base_url: str, params:
         response = await client.get(results_url, **kwargs)
         _check_siem_access(response, request)
         if response.status_code != 200:
-            raise RuntimeError(_http_failure("Reading the search results failed", response))
+            raise ConnectorError(_http_failure("Reading the search results failed", response))
         if request.result_mode == 'records':
             batch = _connector_records(response.json(), request)
         else:
@@ -4328,20 +4471,20 @@ async def fetch_via_search_job(client: httpx.AsyncClient, base_url: str, params:
 def _connector_records(data, request):
     resolved = _resolve_path(data, request.response_path or "")
     if resolved is None:
-        raise ValueError("No records at the configured Records location. Check it using a sample response.")
+        raise ConnectorError("No records at the configured Records location. Check it using a sample response.")
     records = resolved if isinstance(resolved, list) else [resolved]
     if request.record_format == "columns":
         columns = _resolve_path(data, request.columns_path)
         if not isinstance(columns, list):
-            raise ValueError("Column names location must point to an array.")
+            raise ConnectorError("Column names location must point to an array.")
         names = [c.get("name") if isinstance(c, dict) else c for c in columns]
         if not all(isinstance(n, str) and n for n in names) or len(set(names)) != len(names):
-            raise ValueError("Column names must be unique, non-empty text.")
+            raise ConnectorError("Column names must be unique, non-empty text.")
         if any(not isinstance(row, list) or len(row) != len(names) for row in records):
-            raise ValueError("Each record must have one value per column name.")
+            raise ConnectorError("Each record must have one value per column name.")
         return [dict(zip(names, row)) for row in records]
     if any(not isinstance(row, dict) for row in records):
-        raise ValueError("Records must be JSON objects. Choose column names + rows for table-shaped responses.")
+        raise ConnectorError("Records must be JSON objects. Choose column names + rows for table-shaped responses.")
     return records
 
 
@@ -4357,13 +4500,13 @@ def _partial_result_warning(data) -> str:
 async def fetch_record_pages(client, request, params, headers, warnings=None):
     """Bounded JSON collection requests; pagination tokens never choose an origin."""
     if not request.api_path_template or not request.api_path_template.startswith('/') or request.api_path_template.startswith('//'):
-        raise ValueError("Enter a request path beginning with /, relative to the API address.")
+        raise ConnectorError("Enter a request path beginning with /, relative to the API address.")
     if request.pagination_mode != 'none' and not request.pagination_parameter.strip():
-        raise ValueError("Enter the pagination parameter name.")
+        raise ConnectorError("Enter the pagination parameter name.")
     _require_connector_values([request.api_path_template, request.api_body_template or '', *(request.api_query_template or {}).values()], params)
     url = _connector_url(request.siem_base_url, request.api_path_template, params)
     if '${' in url:
-        raise ValueError("The request path needs a missing link or query value. Check its placeholders.")
+        raise ConnectorError("The request path needs a missing link or query value. Check its placeholders.")
     query = {key: _substitute_plain(value, params) for key, value in (request.api_query_template or {}).items()}
     rendered_headers = _connector_headers(headers, request, params)
     records, cursor, seen, available = [], None, set(), None
@@ -4381,18 +4524,18 @@ async def fetch_record_pages(client, request, params, headers, warnings=None):
             kwargs = {'headers': rendered_headers, 'params': httpx.URL(url).params.merge(page_query)}
             if request.api_body_template:
                 if request.api_method.upper() == 'GET':
-                    raise ValueError("GET requests use query parameters; leave Request body empty.")
+                    raise ConnectorError("GET requests use query parameters; leave Request body empty.")
                 kwargs['json'] = _substitute_json_body(request.api_body_template, params)
             response = await client.request(request.api_method, url, **kwargs)
             _check_siem_access(response, request)
             if not response.is_success:
                 detail = _extract_api_error_detail(response)
-                raise ValueError(f"API returned HTTP {response.status_code}" + (f" — {detail}" if detail else "")
+                raise ConnectorError(f"API returned HTTP {response.status_code}" + (f" — {detail}" if detail else "")
                                  + ". Check the address, sign-in and request settings.")
             try:
                 data = response.json()
             except ValueError:
-                raise ValueError("The API did not return JSON. Check the request path and sign-in.")
+                raise ConnectorError("The API did not return JSON. Check the request path and sign-in.")
             batch = _connector_records(data, request)
             warning = _partial_result_warning(data)
             if warning and warnings is not None and warning not in warnings:
@@ -4410,7 +4553,7 @@ async def fetch_record_pages(client, request, params, headers, warnings=None):
                 return records, available, len(batch) > room or (not exhausted and request.pagination_mode != 'none') or (available is not None and available > len(records))
             if request.pagination_mode == 'cursor':
                 if not isinstance(cursor, (str, int)) or str(cursor) in seen:
-                    raise ValueError("The API returned a repeated or invalid page token. Check pagination settings.")
+                    raise ConnectorError("The API returned a repeated or invalid page token. Check pagination settings.")
                 seen.add(str(cursor))
     return records, available, not exhausted
 
@@ -4634,23 +4777,63 @@ def _message_text(value, depth: int = 0) -> str:
 
 
 def _extract_api_error_detail(response: httpx.Response) -> str:
-    """Pull the human-readable reason out of a SIEM's error response body.
-    Most SIEM APIs return JSON whose most useful
-    field varies by vendor — try the common names, fall back to raw text."""
+    """The human-readable reason in an API's JSON error, or "". Most APIs name
+    the field differently, so the common names are tried. A body without one
+    (an HTML page, a stack trace, an echo of the request) is never repeated."""
     try:
         body = response.json()
-        if isinstance(body, dict):
-            for key in ("description", "message", "error", "detail", "reason", "messages", "error_messages"):
-                text = _message_text(body.get(key))
-                if text:
-                    return text[:300]
-            http_resp = body.get("http_response")
-            if isinstance(http_resp, dict) and http_resp.get("message"):
-                return str(http_resp["message"])[:300]
-    except Exception:
-        pass
-    text = (response.text or "").strip()
-    return text[:300] if text else ""
+    except ValueError:
+        return ""
+    text = ""
+    if isinstance(body, dict):
+        for key in ("description", "message", "error", "detail", "reason", "messages", "error_messages"):
+            text = _message_text(body.get(key))
+            if text:
+                break
+        http_resp = body.get("http_response")
+        if not text and isinstance(http_resp, dict) and isinstance(http_resp.get("message"), str):
+            text = http_resp["message"]
+    return upstream_text(text, response, 300)
+
+
+def upstream_text(text, response: httpx.Response, limit: int) -> str:
+    """Text from a service's reply as a message may repeat it: any credential
+    the request sent is hidden, control characters are removed and the length
+    is bounded."""
+    return _CONTROL_CHARACTERS.sub(" ", _hide_sent_credentials(str(text), response))[:limit]
+
+
+def _hide_sent_credentials(text: str, response: httpx.Response) -> str:
+    """An error message with any credential the request sent (a header value,
+    or the password of basic sign-in) replaced, in case the server echoed it.
+    Values of six characters or more are replaced wherever they appear."""
+    try:
+        sent = response.request.headers
+    except RuntimeError:  # a response built without a request
+        return text
+    values = []
+    for name, value in sent.items():
+        if name.lower() in ("content-type", "accept", "content-length", "host", "user-agent", "accept-encoding", "connection"):
+            continue
+        values.append(value)
+        if name.lower() == "cookie":
+            values.extend(part.split("=", 1)[-1].strip() for part in value.split(";"))
+        scheme, _, credential = value.partition(" ")
+        if credential:
+            values.append(credential)
+            if scheme.lower() == "basic":
+                try:
+                    values.extend(base64.b64decode(credential).decode("utf-8", "replace").split(":", 1))
+                except ValueError:
+                    pass
+    for value in sorted({v for v in values if v}, key=len, reverse=True):
+        if len(value) >= 6:
+            text = text.replace(value, "[hidden]")
+        else:
+            # A short value is hidden where it stands alone, so that a value such
+            # as "en" does not blank out every word containing those letters.
+            text = re.sub(r"(?<![A-Za-z0-9])" + re.escape(value) + r"(?![A-Za-z0-9])", "[hidden]", text)
+    return text
 
 
 def _http_failure(what: str, response: httpx.Response) -> str:
@@ -4893,11 +5076,46 @@ class ProviderModelsRequest(BaseModel):
     custom_provider: Optional[CustomProviderConfig] = None  # for provider "custom"
 
 
-def _model_entry(model_id, name=None, context=None, created=None, owner=None):
+def _count(value):
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+
+
+# Claude lists effort levels as an object; show them from least to most.
+_EFFORT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+
+
+def _reasoning_options(style: str, m: dict) -> Dict:
+    """The reasoning settings a model reports in its provider's model list:
+    DeepSeek's effort.supported_levels, Claude's capabilities.effort and
+    capabilities.thinking.types. Nothing is assumed for models that report
+    none, so the analyst is never offered a setting the model would refuse."""
+    if style == "deepseek":
+        effort = m.get("effort") if isinstance(m.get("effort"), dict) else {}
+        levels = [str(level) for level in effort.get("supported_levels") or [] if isinstance(level, str)]
+        default = effort.get("default_level")
+        # Only models with effort levels think, so only they get the switch.
+        return {"efforts": levels[:8], "default_effort": default if default in levels else None, "thinking_switch": bool(levels)}
+    if style == "claude":
+        capabilities = m.get("capabilities") if isinstance(m.get("capabilities"), dict) else {}
+        effort = capabilities.get("effort") if isinstance(capabilities.get("effort"), dict) else {}
+        levels = [key for key, value in effort.items() if isinstance(value, dict) and value.get("supported") is True]
+        levels.sort(key=lambda level: _EFFORT_ORDER.index(level) if level in _EFFORT_ORDER else len(_EFFORT_ORDER))
+        thinking = capabilities.get("thinking") if isinstance(capabilities.get("thinking"), dict) else {}
+        types = thinking.get("types") if isinstance(thinking.get("types"), dict) else {}
+        supported = lambda kind: isinstance(types.get(kind), dict) and types[kind].get("supported") is True
+        return {"efforts": levels[:8], "default_effort": None, "thinking_switch": supported("adaptive") and supported("disabled")}
+    return {"efforts": [], "default_effort": None, "thinking_switch": False}
+
+
+def _model_entry(model_id, name=None, context=None, created=None, owner=None, max_output=None, reasoning=None):
     return {"id": model_id, "name": str(name or model_id)[:120],
-            "context_length": context if isinstance(context, int) and not isinstance(context, bool) else None,
+            "context_length": _count(context),
             "created": created if isinstance(created, (int, str)) and not isinstance(created, bool) else None,
-            "owned_by": str(owner)[:80] if owner else None}
+            "owned_by": str(owner)[:80] if owner else None,
+            # The largest answer the provider allows, thinking included; the
+            # extension keeps Maximum output tokens at or below it.
+            "max_output_tokens": _count(max_output),
+            **(reasoning or {"efforts": [], "default_effort": None, "thinking_switch": False})}
 
 
 def parse_model_list(style: str, body) -> List[Dict]:
@@ -4910,7 +5128,8 @@ def parse_model_list(style: str, body) -> List[Dict]:
             if "generateContent" not in (m.get("supportedGenerationMethods") or []):
                 continue
             model_id = m["name"].removeprefix("models/")
-            found.append(_model_entry(model_id, m.get("displayName"), m.get("inputTokenLimit")))
+            found.append(_model_entry(model_id, m.get("displayName"), m.get("inputTokenLimit"),
+                                      max_output=m.get("outputTokenLimit")))
         return found
     items = body if isinstance(body, list) else (body.get("data") if isinstance(body, dict) else None)
     for m in items or []:
@@ -4924,8 +5143,11 @@ def parse_model_list(style: str, body) -> List[Dict]:
         if _NOT_CHAT_MODEL.search(m["id"]):
             continue
         found.append(_model_entry(m["id"], m.get("display_name") or m.get("name"),
-                                  m.get("context_window") or m.get("context_length"),
-                                  m.get("created") or m.get("created_at"), m.get("owned_by") or m.get("organization")))
+                                  m.get("context_window") or m.get("context_length") or m.get("max_input_tokens"),
+                                  m.get("created") or m.get("created_at"), m.get("owned_by") or m.get("organization"),
+                                  # DeepSeek: max_output_tokens; Groq: max_completion_tokens; Claude: max_tokens.
+                                  m.get("max_output_tokens") or m.get("max_completion_tokens") or m.get("max_tokens"),
+                                  _reasoning_options(style, m)))
     return found
 
 

@@ -214,7 +214,9 @@ async function runAnalysis(caseId, payload, reviewMilliseconds = 0, purpose = 'a
       // The AI's answer (real values restored by the backend) and the restore
       // map, kept until the popup shows this case and files the answer under
       // its report or conversation, even if the popup was closed meanwhile.
-      await store.set({ pendingAnswer: { purpose, raw: result.analysis || '', mapping: result.mapping_table || null, completedAt: Date.now() },
+      // cutOff: the answer reached the output limit (see usable_answer in server.py).
+      const cutOff = String(result.outbound?.ai?.outcome || '').startsWith('answered (cut off');
+      await store.set({ pendingAnswer: { purpose, raw: result.analysis || '', mapping: result.mapping_table || null, cutOff, completedAt: Date.now() },
         analysisError: null, analysisCompletedAt: Date.now() });
       return;
     }

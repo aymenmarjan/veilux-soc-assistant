@@ -19,6 +19,7 @@ class OpenRouterPickerTests(unittest.TestCase):
         self.page.goto(self.url + '/extension/settings.html')
         expect(self.page.locator('#settings-save-state')).to_have_text('Settings saved')
         picker = self.page.locator('#openrouter-model-picker')
+        self.page.locator('#openrouter-card > summary').click()
         expect(picker).to_contain_text('No OpenRouter model chosen yet')
         self.page.locator('#openrouter-find').click()
         expect(self.page.locator('#openrouter-status')).to_contain_text('3 free models available')

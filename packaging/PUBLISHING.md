@@ -14,12 +14,12 @@ contains:
 
 | File | For |
 | --- | --- |
-| `veilux-1.0.1-chromium.zip` | Chrome, Edge, Brave, Opera, Vivaldi (121+) |
-| `veilux-1.0.1-firefox.xpi` | Firefox 140+ (unsigned until Mozilla signs it) |
-| `veilux-backend-1.0.1-windows-x64.zip` | Windows 10/11, x64 |
-| `veilux-backend-1.0.1-linux-x64.tar.gz` | Linux x64 with glibc 2.35+ |
-| `veilux-backend-1.0.1-macos-x64.tar.gz` | macOS on Intel |
-| `veilux-backend-1.0.1-macos-arm64.tar.gz` | macOS on Apple silicon |
+| `veilux-1.0.2-chromium.zip` | Chrome, Edge, Brave, Opera, Vivaldi (121+) |
+| `veilux-1.0.2-firefox.xpi` | Firefox 140+ (unsigned until Mozilla signs it) |
+| `veilux-backend-1.0.2-windows-x64.zip` | Windows 10/11, x64 |
+| `veilux-backend-1.0.2-linux-x64.tar.gz` | Linux x64 with glibc 2.35+ |
+| `veilux-backend-1.0.2-macos-x64.tar.gz` | macOS on Intel |
+| `veilux-backend-1.0.2-macos-arm64.tar.gz` | macOS on Apple silicon |
 | `SHA256SUMS.txt` | SHA-256 of each file above |
 
 The **safari-experimental** artifact holds an unsigned Xcode project and the
@@ -45,7 +45,7 @@ The add-on ID is `veilux-soc-assistant@veilux.local`. Keep it: Mozilla treats a
 new ID as a different add-on.
 
 - **Listed on AMO.** In the AMO Developer Hub, submit
-  `veilux-1.0.1-firefox.xpi` as a new add-on, Firefox desktop only.
+  `veilux-1.0.2-firefox.xpi` as a new add-on, Firefox desktop only.
   - The code is not minified or generated, so no separate source code
     package is needed.
   - Answer the review notes about the page scripts as agreed before: they are
@@ -62,7 +62,7 @@ new ID as a different add-on.
 ## Chrome, Edge, Brave, Opera and Vivaldi
 
 - **Chrome Web Store** (also used by Brave and Vivaldi):
-  1. In the developer dashboard, upload `veilux-1.0.1-chromium.zip`.
+  1. In the developer dashboard, upload `veilux-1.0.2-chromium.zip`.
   2. Give each permission's justification.
   3. Disclose website-content access in the privacy section: VEILUX reads
      pages only when the analyst extracts from them.
@@ -78,7 +78,7 @@ new ID as a different add-on.
    migration guide.
 2. Let **Release packages** run there.
 3. Create the release:
-   - tag the commit `v1.0.1`;
+   - tag the commit `v1.0.2`;
    - create a GitHub release from the tag;
    - attach all files from **veilux-release-packages**, including
      `SHA256SUMS.txt` and the signed Firefox XPI.

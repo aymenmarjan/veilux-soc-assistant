@@ -83,8 +83,18 @@ const addDomainBtn = document.getElementById('add-domain-btn');
 const connectorList = document.getElementById('connector-list');
 const addConnectorTrigger = document.getElementById('add-connector-trigger');
 const connectorForm = document.getElementById('connector-form');
-// OpenRouter model picker (openrouter_models.js); it saves the choice itself.
-const openRouterPicker = VeiluxOpenRouter.mount(document.getElementById('openrouter-model-picker'), { prefix: 'openrouter' });
+// OpenRouter model picker (openrouter_models.js) and its Advanced settings
+// (output limit only); both save themselves.
+const openRouterAdvanced = VeiluxProviderModels.mountAdvanced(document.getElementById('openrouter-advanced'), {
+  provider: 'openrouter', name: 'OpenRouter',
+  model: async () => {
+    const { id, info } = await VeiluxOpenRouter.current();
+    return id ? { id, max_output_tokens: info?.max_completion_tokens } : null;
+  }
+});
+const openRouterPicker = VeiluxOpenRouter.mount(document.getElementById('openrouter-model-picker'), {
+  prefix: 'openrouter', onChange: () => openRouterAdvanced.refresh()
+});
 // Model pickers for the other built-in providers (provider_models.js); each saves its choice itself.
 const providerKeyInputs = {
   groq: document.getElementById('groq-api-key'), deepseek: document.getElementById('deepseek-api-key'),
@@ -92,7 +102,31 @@ const providerKeyInputs = {
   claude: document.getElementById('claude-api-key')
 };
 const providerModelPickers = Object.entries(providerKeyInputs).map(([provider, keyInput]) =>
-  VeiluxProviderModels.mount(document.getElementById(provider + '-model-picker'), { provider, keyInput }));
+  VeiluxProviderModels.mount(document.getElementById(provider + '-model-picker'),
+    { provider, keyInput, advanced: document.getElementById(provider + '-advanced') }));
+
+// Each provider card's summary says whether it is ready: key, then model.
+async function showProviderStates() {
+  const models = await VeiluxProviderModels.all();
+  const openRouterModel = (await VeiluxOpenRouter.current()).id;
+  const keys = { ...providerKeyInputs, openrouter: document.getElementById('openrouter-api-key') };
+  for (const [provider, keyInput] of Object.entries(keys)) {
+    const model = provider === 'openrouter' ? openRouterModel : models[provider]?.id;
+    const state = !keyInput.value.trim() ? ['missing', 'No key'] : !model ? ['partial', 'Choose a model'] : ['ready', model];
+    const badge = document.getElementById(provider + '-state');
+    badge.dataset.state = state[0];
+    badge.textContent = state[1];
+  }
+}
+document.querySelectorAll('.provider-card input[type=password]').forEach(input => input.addEventListener('input', showProviderStates));
+document.getElementById('openrouter-test').addEventListener('click', async event => {
+  event.target.disabled = true;
+  const status = document.getElementById('openrouter-test-status');
+  status.textContent = 'Testing the OpenRouter key…';
+  status.textContent = (await checkOpenRouter(document.getElementById('openrouter-api-key').value.trim()))
+    .message.replace(/^No key$/, 'Enter the OpenRouter API key first.');
+  event.target.disabled = false;
+});
 
 // DOM Elements - Local backend
 const backendUrlInput = document.getElementById('backend-url');
@@ -228,7 +262,7 @@ const SETTINGS_KEYS = [
   'enablePatternSanitization', 'enableJsonKeySanitization', 'enableCustomKeywords', 'enableStatisticsFieldSanitization',
   'jsonKeysList', 'statisticsFieldsList', 'customKeywordsList', 'customRegexRules', 'heuristicFieldExclusions', 'heuristicSettings', 'customCidrsList', 'customDomainsList', 'customPrompts', 'extractionOutputMode',
   'defaultPromptId', 'enableThreatIntel', 'connectorProfiles', 'customAiProviders', 'backendUrl',
-  'openrouterModel', 'openrouterModelInfo', 'providerModels', 'caseSlots', 'maxRunningAnalyses', 'theme',
+  'openrouterModel', 'openrouterModelInfo', 'providerModels', 'providerGeneration', 'caseSlots', 'maxRunningAnalyses', 'theme',
   'reportTemplates', 'defaultReportTemplateId', 'chatQuickQuestions'
 ];
 const API_KEY_SETTINGS = [
@@ -471,6 +505,7 @@ browser.storage.local.get('theme').then(({ theme }) => { darkModeInput.checked =
 darkModeInput.addEventListener('change', () => browser.storage.local.set({ theme: darkModeInput.checked ? 'dark' : 'light' }));
 browser.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.theme) darkModeInput.checked = changes.theme.newValue === 'dark';
+  if (area === 'local' && (changes.providerModels || changes.openrouterModel)) showProviderStates();
 });
 
 // A whole number within [min, max] from a number field; out-of-range values are clamped.
@@ -501,6 +536,8 @@ async function loadSettings() {
   geminiApiKeyInput.value = settings.geminiApiKey || '';
   claudeApiKeyInput.value = settings.claudeApiKey || '';
   providerModelPickers.forEach(picker => picker.refresh());
+  openRouterAdvanced.refresh();
+  showProviderStates();
   virustotalApiKeyInput.value = settings.virustotalApiKey || '';
   abuseipdbApiKeyInput.value = settings.abuseipdbApiKey || '';
   // Off by default — free-tier reputation APIs are rate-limited, and unlike
@@ -1182,6 +1219,7 @@ async function resetAllSettings() {
   backendUrlInput.value = '';
   backendTokenInput.value = '';
   openRouterPicker.refresh();
+  openRouterAdvanced.refresh();
   providerModelPickers.forEach(picker => picker.refresh());
   groqApiKeyInput.value = '';
   deepseekApiKeyInput.value = '';
@@ -1189,6 +1227,7 @@ async function resetAllSettings() {
   openrouterApiKeyInput.value = '';
   geminiApiKeyInput.value = '';
   claudeApiKeyInput.value = '';
+  showProviderStates();
   virustotalApiKeyInput.value = '';
   abuseipdbApiKeyInput.value = '';
   enableThreatIntel.checked = false;
@@ -1578,32 +1617,25 @@ async function testAllApis() {
   testApisBtn.textContent = '⏳ Testing...';
   const rows = [];
   for (const [provider, name] of Object.entries(VeiluxProviderModels.PROVIDERS)) {
-    const key = providerKeyInputs[provider].value.trim();
-    if (!key) { rows.push(formatApiResult(name, 'No key', 'skip')); continue; }
-    try {
-      const models = await VeiluxProviderModels.list(provider, key);
-      const chosen = await VeiluxProviderModels.current(provider);
-      if (!chosen) rows.push(formatApiResult(name, '⚠ Key works · ' + models.length + ' models · choose a model', 'skip'));
-      else if (models.some(m => m.id === chosen.id)) rows.push(formatApiResult(name, '✓ OK · ' + chosen.id, 'success'));
-      else rows.push(formatApiResult(name, '✗ Key works, but ' + chosen.id + ' is not available. Choose another model.', 'error'));
-    } catch (e) {
-      rows.push(formatApiResult(name, '✗ ' + VeiluxProviderModels.failureText(e), 'error'));
-    }
+    const result = await VeiluxProviderModels.check(provider, providerKeyInputs[provider].value.trim());
+    rows.push(formatApiResult(name, result.message, result.state));
   }
-  // OpenRouter: its key endpoint, so no model has to be chosen first.
-  const openrouterKey = openrouterApiKeyInput.value.trim();
-  if (!openrouterKey) rows.splice(3, 0, formatApiResult('OpenRouter', 'No key', 'skip'));
-  else {
-    try {
-      const response = await fetch('https://openrouter.ai/api/v1/key', { headers: { 'Authorization': 'Bearer ' + openrouterKey } });
-      rows.splice(3, 0, formatApiResult('OpenRouter', response.ok ? '✓ OK' : '✗ ' + response.status, response.ok ? 'success' : 'error'));
-    } catch (e) {
-      rows.splice(3, 0, formatApiResult('OpenRouter', '✗ Failed', 'error'));
-    }
-  }
+  const openRouter = await checkOpenRouter(openrouterApiKeyInput.value.trim());
+  rows.splice(3, 0, formatApiResult('OpenRouter', openRouter.message, openRouter.state));
   setHTML(apiTestResults, '<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">' + rows.join('') + '</div>');
   testApisBtn.disabled = false;
   testApisBtn.textContent = '🧪 Test All APIs';
+}
+
+// OpenRouter: its key endpoint, so no model has to be chosen first.
+async function checkOpenRouter(key) {
+  if (!key) return { state: 'skip', message: 'No key' };
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/key', { headers: { 'Authorization': 'Bearer ' + key } });
+    return response.ok ? { state: 'success', message: '✓ OK' } : { state: 'error', message: '✗ ' + response.status };
+  } catch (e) {
+    return { state: 'error', message: '✗ Failed' };
+  }
 }
 
 function formatApiResult(name, msg, status) {

@@ -1501,7 +1501,7 @@ async function applyPendingAnswer(pending) {
   if (!pending || !pending.raw && pending.raw !== '') return;
   try {
     if (pending.purpose === 'report') {
-      await window.VeiluxReportPanel.applyAnswer(pending.raw, pending.mapping);
+      await window.VeiluxReportPanel.applyAnswer(pending.raw, pending.mapping, pending.cutOff);
       updateStatus('Report ready. Review it, then copy it into your email.', 'success');
     } else if (pending.purpose === 'chat') {
       await window.VeiluxChatPanel.applyAnswer(pending.raw);
@@ -1748,6 +1748,13 @@ async function analyzeWithAI(task = null) {
     }
     if (openrouterModel) payload.openrouter_model = openrouterModel;
     if (providerModel) payload.model = providerModel.id;
+    // Output limit, thinking and effort from Settings → Providers and API keys → Advanced,
+    // limited to what the chosen model reports it supports.
+    if (providerModel || openrouterModel) {
+      const model = providerModel || { id: openrouterModel,
+        max_output_tokens: (await VeiluxOpenRouter.current(caseStorage)).info?.max_completion_tokens };
+      payload.generation = VeiluxProviderModels.generationFor(model, await VeiluxProviderModels.savedGeneration(mode, caseStorage));
+    }
 
     // The request runs in the background worker (background.js), so closing
     // the popup does not cancel it. waitAndApplyAnalysis picks up the result.

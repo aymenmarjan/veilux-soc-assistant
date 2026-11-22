@@ -57,9 +57,11 @@ with guidance for authentication, access, missing models and rate limits.
   authentication, rate-limit and server errors are not retried.
 - Test connection and analysis use the same settings, including the response
   length limit.
-- Answers made of several blocks are joined; reasoning or "thinking" blocks are
-  skipped. A reply with only reasoning explains that the response limit or the
-  connection type may need changing.
+- Answers made of several blocks are joined as written; reasoning or
+  "thinking" blocks and `<think>` sections are skipped. A reply with no answer
+  text is an error, never an empty result: when the model reached the response
+  length limit first, the message says so. An answer cut off at the limit is
+  shown with a note saying so. Nothing is retried with a larger limit.
 
 These behaviours are covered by tests with mocked services; they do not prove
 compatibility with every model or API variant.

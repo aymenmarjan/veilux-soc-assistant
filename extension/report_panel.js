@@ -167,9 +167,18 @@ window.VeiluxReportPanel = (() => {
     finally { byId('report-generate').disabled = false; }
   }
 
-  async function applyAnswer(raw, mapping) {
+  // `cutOff`: the AI reached its output limit, so an unreadable report is
+  // explained by that limit rather than by the model.
+  async function applyAnswer(raw, mapping, cutOff = false) {
     const { reportState } = await caseStorage.get('reportState');
-    state = { ...(reportState || state || {}), content: R.parseAnswer(raw), mapping: mapping || null, generatedAt: Date.now() };
+    let content;
+    try { content = R.parseAnswer(raw); }
+    catch (error) {
+      if (!cutOff) throw error;
+      throw new Error('The report was cut off at the output limit before it was complete. Raise Maximum output tokens ' +
+        '(Settings → Providers and API keys → the provider → Advanced) or a custom model\'s Response length limit, then generate it again.');
+    }
+    state = { ...(reportState || state || {}), content, mapping: mapping || null, generatedAt: Date.now() };
     await caseStorage.set({ reportState: state });
     if (!template) await chooseTemplate(state.templateId);
     opened = true;
