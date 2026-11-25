@@ -89,7 +89,7 @@ Three pieces work together: a **backend** on your computer, the **extension** in
 | | Step | How |
 |:-:|---|---|
 | 1️⃣ | **Start the backend** | Download the standalone backend for your system (no Python needed), or run it from source. See [Run the backend](#1-run-the-backend). |
-| 2️⃣ | **Install the extension** | Load the Chromium ZIP or Firefox XPI from a release, or the `extension/` folder from a clone. See [Install the extension](#2-install-the-extension). |
+| 2️⃣ | **Install the extension** | [Firefox Add-ons](https://addons.mozilla.org/addon/veilux/) (recommended), or load the Chromium ZIP / Firefox XPI from a release. See [Install the extension](#2-install-the-extension). |
 | 3️⃣ | **Pair them once** | The backend prints a code such as `K7QM-3XPA`. Enter it in the extension's **Settings → Backend** and choose **Pair**. |
 | 4️⃣ | **Add an AI key and a connection** | **Settings → AI → Providers and keys**, then **Settings → Connections → Add a connection** and pick a [platform template](#integrations) (Splunk, Microsoft Sentinel, Defender, …) or describe your own source. |
 | 5️⃣ | **Extract → Analyze** | Open a search, alert or incident page, click the VEILUX icon → **Extract**, then **Analyze**. |
@@ -125,7 +125,7 @@ pip install -r requirements.txt
 python server.py
 ```
 
-Then load the `extension/` folder as an unpacked extension (Chromium) or a temporary add-on (Firefox).
+Then install the extension from [Firefox Add-ons](https://addons.mozilla.org/addon/veilux/) or load the `extension/` folder as an unpacked extension (Chromium). Firefox developers can also load it temporarily.
 
 Needs Python 3.12 or later.
 
@@ -590,7 +590,7 @@ python server.py --host 0.0.0.0
 
 ### 2. Install the extension
 
-Use the package from a release, or the `extension/` folder of a clone. Steps differ slightly per browser family.
+For Firefox, install VEILUX from the official Firefox Add-ons marketplace. For Chromium browsers, use the release package or the `extension/` folder from a clone. Alternative installation methods are documented below.
 
 #### Chromium browsers
 
@@ -607,6 +607,14 @@ From a release, extract `veilux-1.0.2-chromium.zip` first and select the extract
 Chromium-based browsers need version 121 or later. Always load the extension from the same folder path: its settings belong to that installation.
 
 #### Firefox
+
+**Recommended: Install from Firefox Add-ons**
+
+Install VEILUX directly from the [official Firefox Add-ons marketplace](https://addons.mozilla.org/addon/veilux/). This provides a permanent installation with automatic extension updates.
+
+The VEILUX backend must be installed and running separately. Follow [Run the backend](#1-run-the-backend), then [pair the extension](#3-pair-the-extension-with-the-backend).
+
+**Alternative installation methods (developers and advanced users)**
 
 **Temporary install** (for trying it out / daily dev use, removed when Firefox closes):
 
