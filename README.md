@@ -20,6 +20,16 @@
   <img alt="IBM QRadar" src="https://img.shields.io/badge/IBM%20QRadar-template-0B1220?style=flat-square"/>
 </p>
 
+
+<p align="center">
+  <a href="https://addons.mozilla.org/addon/veilux/"><b>🦊 Get VEILUX on Firefox Add-ons</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/aymenmarjan/veilux-soc-assistant/releases/latest"><b>📦 Download Releases</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://medium.com/@4ymenmarjan/veilux-let-ai-help-with-your-security-logs-without-sharing-sensitive-data-c3c7612dc7f9"><b>📝 Read the Story & Demo</b></a>
+</p>
+
+
 <p align="center">
   <a href="#quick-start"><b>Quick start</b></a> ·
   <a href="#how-it-works"><b>How it works</b></a> ·
